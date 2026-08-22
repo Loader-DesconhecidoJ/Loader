@@ -1129,28 +1129,59 @@ homeCamDot.ZIndex = 6
 homeCamDot.Parent = PhoneHome
 Instance.new("UICorner", homeCamDot).CornerRadius = UDim.new(1, 0)
 
-local homeStatus = Instance.new("TextLabel")
-homeStatus.Name = "StatusClock"
-homeStatus.Size = UDim2.new(0.5, -10, 0, 22)
-homeStatus.Position = UDim2.new(0, 20, 0, 40)
-homeStatus.BackgroundTransparency = 1
-homeStatus.Text = os.date("%H:%M")
-homeStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
-homeStatus.Font = Enum.Font.GothamBold
-homeStatus.TextSize = 14
-homeStatus.TextXAlignment = Enum.TextXAlignment.Left
-homeStatus.ZIndex = 5
-homeStatus.Parent = PhoneHome
+-- Status bar (relógio + WiFi + Bateria falsa) - aparece em todos os apps
+local statusClocks = {}
+
+local function createStatusBar(parent)
+    local statusFrame = Instance.new("Frame")
+    statusFrame.Name = "StatusBar"
+    statusFrame.Size = UDim2.new(1, -40, 0, 18)
+    statusFrame.Position = UDim2.new(0, 20, 0, 38)
+    statusFrame.BackgroundTransparency = 1
+    statusFrame.ZIndex = 8
+    statusFrame.Parent = parent
+
+    local clock = Instance.new("TextLabel")
+    clock.Name = "StatusClock"
+    clock.Size = UDim2.new(0.38, 0, 1, 0)
+    clock.Position = UDim2.new(0, 0, 0, 0)
+    clock.BackgroundTransparency = 1
+    clock.Text = os.date("%H:%M")
+    clock.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clock.Font = Enum.Font.GothamBold
+    clock.TextSize = 13
+    clock.TextXAlignment = Enum.TextXAlignment.Left
+    clock.ZIndex = 9
+    clock.Parent = statusFrame
+
+    local rightStatus = Instance.new("TextLabel")
+    rightStatus.Name = "WifiBattery"
+    rightStatus.Size = UDim2.new(0.58, 0, 1, 0)
+    rightStatus.Position = UDim2.new(0.42, 0, 0, 0)
+    rightStatus.BackgroundTransparency = 1
+    rightStatus.Text = "📶  🔋 87%"
+    rightStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+    rightStatus.Font = Enum.Font.GothamBold
+    rightStatus.TextSize = 12
+    rightStatus.TextXAlignment = Enum.TextXAlignment.Right
+    rightStatus.ZIndex = 9
+    rightStatus.Parent = statusFrame
+
+    table.insert(statusClocks, clock)
+    return clock, rightStatus
+end
+
+local homeStatus = createStatusBar(PhoneHome)
 
 fpsLabel = Instance.new("TextLabel")
 fpsLabel.Name = "FPSLabel"
-fpsLabel.Size = UDim2.new(0.5, -10, 0, 22)
-fpsLabel.Position = UDim2.new(0.5, 0, 0, 40)
+fpsLabel.Size = UDim2.new(0.5, -10, 0, 16)
+fpsLabel.Position = UDim2.new(0.5, 0, 0, 56)
 fpsLabel.BackgroundTransparency = 1
 fpsLabel.Text = "FPS: --"
 fpsLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
 fpsLabel.Font = Enum.Font.GothamBold
-fpsLabel.TextSize = 13
+fpsLabel.TextSize = 11
 fpsLabel.TextXAlignment = Enum.TextXAlignment.Right
 fpsLabel.Visible = false
 fpsLabel.ZIndex = 5
@@ -1227,8 +1258,11 @@ local currentFps = 0
 
 task.spawn(function()
     while true do
-        if homeStatus and homeStatus.Parent then
-            homeStatus.Text = os.date("%H:%M")
+        local t = os.date("%H:%M")
+        for _, clk in ipairs(statusClocks) do
+            if clk and clk.Parent then
+                clk.Text = t
+            end
         end
         task.wait(1)
     end
@@ -1251,54 +1285,55 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ========== VOLUME FIXO ==========
+-- Botões de volume mais finos (estilo real) e um pouco mais para cima
 local VolumeFrame = Instance.new("Frame")
 VolumeFrame.Name = "VolumeFrame"
-VolumeFrame.Size = UDim2.new(0, 28, 0, 110)
-VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
+VolumeFrame.Size = UDim2.new(0, 18, 0, 92)
+VolumeFrame.Position = UDim2.new(0, -24, 0.5, -72)
 VolumeFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-VolumeFrame.BackgroundTransparency = 0.15
+VolumeFrame.BackgroundTransparency = 0.12
 VolumeFrame.BorderSizePixel = 0
 VolumeFrame.ZIndex = 30
 VolumeFrame.Visible = false
 VolumeFrame.Parent = ScreenGui
-Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 9)
 local volFrameStroke = Instance.new("UIStroke")
 volFrameStroke.Color = Color3.fromRGB(50, 205, 50)
-volFrameStroke.Thickness = 1.2
+volFrameStroke.Thickness = 1
 volFrameStroke.Parent = VolumeFrame
 
 local VolUpBtn = Instance.new("TextButton")
 VolUpBtn.Name = "VolUp"
-VolUpBtn.Size = UDim2.new(1, -4, 0, 48)
-VolUpBtn.Position = UDim2.new(0, 2, 0, 4)
+VolUpBtn.Size = UDim2.new(1, -4, 0, 40)
+VolUpBtn.Position = UDim2.new(0, 2, 0, 3)
 VolUpBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolUpBtn.Text = "🔊"
 VolUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolUpBtn.Font = Enum.Font.GothamBold
-VolUpBtn.TextSize = 16
+VolUpBtn.TextSize = 13
 VolUpBtn.ZIndex = 31
 VolUpBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 7)
 local volUpStroke = Instance.new("UIStroke")
 volUpStroke.Color = Color3.fromRGB(50, 205, 50)
-volUpStroke.Thickness = 1
+volUpStroke.Thickness = 0.8
 volUpStroke.Parent = VolUpBtn
 
 local VolDownBtn = Instance.new("TextButton")
 VolDownBtn.Name = "VolDown"
-VolDownBtn.Size = UDim2.new(1, -4, 0, 48)
-VolDownBtn.Position = UDim2.new(0, 2, 0, 58)
+VolDownBtn.Size = UDim2.new(1, -4, 0, 40)
+VolDownBtn.Position = UDim2.new(0, 2, 0, 48)
 VolDownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolDownBtn.Text = "🔉"
 VolDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolDownBtn.Font = Enum.Font.GothamBold
-VolDownBtn.TextSize = 16
+VolDownBtn.TextSize = 13
 VolDownBtn.ZIndex = 31
 VolDownBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 7)
 local volDownStroke = Instance.new("UIStroke")
 volDownStroke.Color = Color3.fromRGB(50, 205, 50)
-volDownStroke.Thickness = 1
+volDownStroke.Thickness = 0.8
 volDownStroke.Parent = VolDownBtn
 
 VolUpBtn.MouseButton1Click:Connect(function()
@@ -1318,8 +1353,12 @@ end)
 local function attachVolumeTo(frame)
     if not frame then return end
     VolumeFrame.Parent = frame
-    VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
+    VolumeFrame.BackgroundTransparency = 0.12
+    VolumeFrame.Position = UDim2.new(0, -50, 0.5, -72)
     VolumeFrame.Visible = true
+    TweenService:Create(VolumeFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, -24, 0.5, -72)
+    }):Play()
 end
 
 -- ========== MUSIC PLAYER (direita) ==========
@@ -1366,9 +1405,11 @@ cameraDot.BorderSizePixel = 0
 cameraDot.Parent = MainFrame
 Instance.new("UICorner", cameraDot).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(MainFrame)
+
 local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 42)
-TopBar.Position = UDim2.new(0, 0, 0, 38)
+TopBar.Size = UDim2.new(1, 0, 0, 36)
+TopBar.Position = UDim2.new(0, 0, 0, 56)
 TopBar.BackgroundTransparency = 1
 TopBar.Parent = MainFrame
 
@@ -1404,7 +1445,7 @@ titleStroke.Parent = MusicTitle
 
 local NowPlayingCard = Instance.new("Frame")
 NowPlayingCard.Size = UDim2.new(1, -24, 0, 118)
-NowPlayingCard.Position = UDim2.new(0, 12, 0, 88)
+NowPlayingCard.Position = UDim2.new(0, 12, 0, 96)
 NowPlayingCard.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 NowPlayingCard.BorderSizePixel = 0
 NowPlayingCard.Parent = MainFrame
@@ -1496,7 +1537,7 @@ timeLabelStroke.Parent = TimeLabel
 
 local Controls = Instance.new("Frame")
 Controls.Size = UDim2.new(1, -24, 0, 52)
-Controls.Position = UDim2.new(0, 12, 0, 218)
+Controls.Position = UDim2.new(0, 12, 0, 226)
 Controls.BackgroundTransparency = 1
 Controls.Parent = MainFrame
 
@@ -1528,7 +1569,7 @@ local RepeatBtn = createBtn("🔁", UDim2.new(1, -42, 0.5, -18), UDim2.new(0, 42
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -24, 0, 32)
-SearchBox.Position = UDim2.new(0, 12, 0, 278)
+SearchBox.Position = UDim2.new(0, 12, 0, 286)
 SearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 SearchBox.PlaceholderText = "🔍 Pesquisar música..."
 SearchBox.Text = ""
@@ -1544,7 +1585,7 @@ searchStroke.Parent = SearchBox
 
 local ScrollList = Instance.new("ScrollingFrame")
 ScrollList.Size = UDim2.new(1, -24, 0, 90)
-ScrollList.Position = UDim2.new(0, 12, 0, 318)
+ScrollList.Position = UDim2.new(0, 12, 0, 326)
 ScrollList.BackgroundTransparency = 1
 ScrollList.ScrollBarThickness = 3
 ScrollList.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
@@ -1555,7 +1596,7 @@ UIListLayout.Parent = ScrollList
 
 local IDInput = Instance.new("TextBox")
 IDInput.Size = UDim2.new(1, -24, 0, 34)
-IDInput.Position = UDim2.new(0, 12, 0, 318)
+IDInput.Position = UDim2.new(0, 12, 0, 326)
 IDInput.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 IDInput.PlaceholderText = "Digite o Sound ID do Roblox..."
 IDInput.Text = ""
@@ -1736,9 +1777,11 @@ swNotch.BorderSizePixel = 0
 swNotch.Parent = StopwatchFrame
 Instance.new("UICorner", swNotch).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(StopwatchFrame)
+
 local swTitle = Instance.new("TextLabel")
 swTitle.Size = UDim2.new(1, 0, 0, 30)
-swTitle.Position = UDim2.new(0, 0, 0, 50)
+swTitle.Position = UDim2.new(0, 0, 0, 58)
 swTitle.BackgroundTransparency = 1
 swTitle.Text = "⏱️ Cronômetro"
 swTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -1859,9 +1902,11 @@ cfgEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
 cfgEars.ZIndex = 10
 cfgEars.Parent = ConfigFrame
 
+createStatusBar(ConfigFrame)
+
 local cfgTitle = Instance.new("TextLabel")
 cfgTitle.Size = UDim2.new(1, 0, 0, 35)
-cfgTitle.Position = UDim2.new(0, 0, 0, 45)
+cfgTitle.Position = UDim2.new(0, 0, 0, 56)
 cfgTitle.BackgroundTransparency = 1
 cfgTitle.Text = "⚙️ Configurações"
 cfgTitle.TextColor3 = Color3.new(1,1,1)
@@ -1870,8 +1915,8 @@ cfgTitle.TextSize = 20
 cfgTitle.Parent = ConfigFrame
 
 local cfgScroll = Instance.new("ScrollingFrame")
-cfgScroll.Size = UDim2.new(1, -20, 1, -100)
-cfgScroll.Position = UDim2.new(0, 10, 0, 85)
+cfgScroll.Size = UDim2.new(1, -20, 1, -110)
+cfgScroll.Position = UDim2.new(0, 10, 0, 92)
 cfgScroll.BackgroundTransparency = 1
 cfgScroll.ScrollBarThickness = 4
 cfgScroll.Parent = ConfigFrame
@@ -2056,9 +2101,11 @@ galNotch.BorderSizePixel = 0
 galNotch.Parent = GalleryFrame
 Instance.new("UICorner", galNotch).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(GalleryFrame)
+
 local galTitle = Instance.new("TextLabel")
 galTitle.Size = UDim2.new(1, 0, 0, 30)
-galTitle.Position = UDim2.new(0, 0, 0, 42)
+galTitle.Position = UDim2.new(0, 0, 0, 56)
 galTitle.BackgroundTransparency = 1
 galTitle.Text = "🖼️ Galeria"
 galTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -2068,7 +2115,7 @@ galTitle.Parent = GalleryFrame
 
 local PhotoSearchBox = Instance.new("TextBox")
 PhotoSearchBox.Size = UDim2.new(1, -24, 0, 32)
-PhotoSearchBox.Position = UDim2.new(0, 12, 0, 80)
+PhotoSearchBox.Position = UDim2.new(0, 12, 0, 88)
 PhotoSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 PhotoSearchBox.PlaceholderText = "🔍 Pesquisar foto..."
 PhotoSearchBox.Text = ""
@@ -2083,8 +2130,8 @@ photoSearchStroke.Thickness = 1.2
 photoSearchStroke.Parent = PhotoSearchBox
 
 local PhotoScrollList = Instance.new("ScrollingFrame")
-PhotoScrollList.Size = UDim2.new(1, -24, 0, 280)
-PhotoScrollList.Position = UDim2.new(0, 12, 0, 120)
+PhotoScrollList.Size = UDim2.new(1, -24, 0, 270)
+PhotoScrollList.Position = UDim2.new(0, 12, 0, 128)
 PhotoScrollList.BackgroundTransparency = 1
 PhotoScrollList.ScrollBarThickness = 3
 PhotoScrollList.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
@@ -2509,7 +2556,23 @@ closePhone = function()
             end)
         end
     end
-    VolumeFrame.Visible = false
+
+    -- Animação de saída dos botões de volume (não some seco)
+    if VolumeFrame.Visible then
+        local volOut = TweenService:Create(VolumeFrame, TweenInfo.new(0.32, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0, -55, 0.5, -72),
+            BackgroundTransparency = 1
+        })
+        volOut:Play()
+        volOut.Completed:Once(function()
+            VolumeFrame.Visible = false
+            VolumeFrame.BackgroundTransparency = 0.12
+            VolumeFrame.Position = UDim2.new(0, -24, 0.5, -72)
+        end)
+    else
+        VolumeFrame.Visible = false
+    end
+
     isPhoneOpen = false
     isMusicOpen = false
     currentApp = "home"
