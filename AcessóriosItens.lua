@@ -67,7 +67,7 @@ do
     title.Parent = Main
 
     local items = {
-        {Key = "BloxyCola",   Emoji = "🥤", Name = "Cola"},
+        {Key = "BloxyCola",   Emoji = " ☕ ", Name = "Cola"},
         {Key = "TzesPhone",   Emoji = "📱", Name = "Phone"},
         {Key = "Lanterna",    Emoji = "🔦", Name = "Lanterna"},
         {Key = "TzeSprayCan", Emoji = "🎨", Name = "Spray"}
@@ -397,7 +397,7 @@ if Workspace.CurrentCamera then
 end
 
 local slotsData = {
-    {Name = "BloxyCola",  Emoji = "🥤", Color = Color3.fromRGB(255, 70, 70),   ToolName = "BloxyCola"},
+    {Name = "BloxyCola",  Emoji = "☕", Color = Color3.fromRGB(255, 70, 70),   ToolName = "BloxyCola"},
     {Name = "TzesPhone",  Emoji = "📱", Color = Color3.fromRGB(50, 205, 50),   ToolName = "TzesPhone"},
     {Name = "Lanterna",   Emoji = "🔦", Color = Color3.fromRGB(255, 200, 50),  ToolName = "Lanterna"},
     {Name = "TzeSprayCan",Emoji = "🎨", Color = Color3.fromRGB(80, 180, 255),  ToolName = "TzeSprayCan"}
@@ -1253,15 +1253,15 @@ end)
 -- ========== VOLUME FIXO ==========
 local VolumeFrame = Instance.new("Frame")
 VolumeFrame.Name = "VolumeFrame"
-VolumeFrame.Size = UDim2.new(0, 28, 0, 110)
-VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
+VolumeFrame.Size = UDim2.new(0, 16, 0, 96)
+VolumeFrame.Position = UDim2.new(0, -22, 0.5, -130)
 VolumeFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 VolumeFrame.BackgroundTransparency = 0.15
 VolumeFrame.BorderSizePixel = 0
 VolumeFrame.ZIndex = 30
 VolumeFrame.Visible = false
 VolumeFrame.Parent = ScreenGui
-Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 8)
 local volFrameStroke = Instance.new("UIStroke")
 volFrameStroke.Color = Color3.fromRGB(50, 205, 50)
 volFrameStroke.Thickness = 1.2
@@ -1269,16 +1269,16 @@ volFrameStroke.Parent = VolumeFrame
 
 local VolUpBtn = Instance.new("TextButton")
 VolUpBtn.Name = "VolUp"
-VolUpBtn.Size = UDim2.new(1, -4, 0, 48)
-VolUpBtn.Position = UDim2.new(0, 2, 0, 4)
+VolUpBtn.Size = UDim2.new(1, -4, 0, 42)
+VolUpBtn.Position = UDim2.new(0, 2, 0, 3)
 VolUpBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolUpBtn.Text = "🔊"
 VolUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolUpBtn.Font = Enum.Font.GothamBold
-VolUpBtn.TextSize = 16
+VolUpBtn.TextSize = 13
 VolUpBtn.ZIndex = 31
 VolUpBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 6)
 local volUpStroke = Instance.new("UIStroke")
 volUpStroke.Color = Color3.fromRGB(50, 205, 50)
 volUpStroke.Thickness = 1
@@ -1286,16 +1286,16 @@ volUpStroke.Parent = VolUpBtn
 
 local VolDownBtn = Instance.new("TextButton")
 VolDownBtn.Name = "VolDown"
-VolDownBtn.Size = UDim2.new(1, -4, 0, 48)
-VolDownBtn.Position = UDim2.new(0, 2, 0, 58)
+VolDownBtn.Size = UDim2.new(1, -4, 0, 42)
+VolDownBtn.Position = UDim2.new(0, 2, 0, 51)
 VolDownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolDownBtn.Text = "🔉"
 VolDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolDownBtn.Font = Enum.Font.GothamBold
-VolDownBtn.TextSize = 16
+VolDownBtn.TextSize = 13
 VolDownBtn.ZIndex = 31
 VolDownBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 6)
 local volDownStroke = Instance.new("UIStroke")
 volDownStroke.Color = Color3.fromRGB(50, 205, 50)
 volDownStroke.Thickness = 1
@@ -1318,7 +1318,8 @@ end)
 local function attachVolumeTo(frame)
     if not frame then return end
     VolumeFrame.Parent = frame
-    VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
+    VolumeFrame.Position = UDim2.new(0, -22, 0.5, -130)
+    VolumeFrame.BackgroundTransparency = 0.15
     VolumeFrame.Visible = true
 end
 
@@ -2509,7 +2510,10 @@ closePhone = function()
             end)
         end
     end
-    VolumeFrame.Visible = false
+
+    -- Volume fica parentado no phone e some JUNTO com ele (sem animação própria)
+    -- quando o frame do phone ficar Visible = false no Completed do tween
+
     isPhoneOpen = false
     isMusicOpen = false
     currentApp = "home"
