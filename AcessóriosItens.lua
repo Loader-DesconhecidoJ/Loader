@@ -1002,6 +1002,49 @@ local filteredPhotoList = {}
 local isInPhotoViewer = false
 local currentPhotoIndex = 0
 
+-- =========================================================
+-- BARRA DE STATUS UNIFICADA (relógio + FPS em todas as telas)
+-- =========================================================
+local statusClocks = {}
+local statusFpsLabels = {}
+
+local function createStatusBar(parent)
+    local clock = Instance.new("TextLabel")
+    clock.Name = "StatusClock"
+    clock.Size = UDim2.new(0.5, -10, 0, 22)
+    clock.Position = UDim2.new(0, 20, 0, 40)
+    clock.BackgroundTransparency = 1
+    clock.Text = os.date("%H:%M")
+    clock.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clock.Font = Enum.Font.GothamBold
+    clock.TextSize = 14
+    clock.TextXAlignment = Enum.TextXAlignment.Left
+    clock.ZIndex = 5
+    clock.Parent = parent
+    table.insert(statusClocks, clock)
+
+    local fps = Instance.new("TextLabel")
+    fps.Name = "FPSLabel"
+    fps.Size = UDim2.new(0.5, -10, 0, 22)
+    fps.Position = UDim2.new(0.5, 0, 0, 40)
+    fps.BackgroundTransparency = 1
+    fps.Text = "FPS: --"
+    fps.TextColor3 = Color3.fromRGB(50, 205, 50)
+    fps.Font = Enum.Font.GothamBold
+    fps.TextSize = 13
+    fps.TextXAlignment = Enum.TextXAlignment.Right
+    fps.Visible = phoneSettings.fpsEnabled
+    fps.ZIndex = 5
+    fps.Parent = parent
+    table.insert(statusFpsLabels, fps)
+
+    if not fpsLabel then
+        fpsLabel = fps
+    end
+
+    return clock, fps
+end
+
 local function createNavBar(parent)
     local navBar = Instance.new("Frame")
     navBar.Name = "NavBar"
@@ -1129,32 +1172,7 @@ homeCamDot.ZIndex = 6
 homeCamDot.Parent = PhoneHome
 Instance.new("UICorner", homeCamDot).CornerRadius = UDim.new(1, 0)
 
-local homeStatus = Instance.new("TextLabel")
-homeStatus.Name = "StatusClock"
-homeStatus.Size = UDim2.new(0.5, -10, 0, 22)
-homeStatus.Position = UDim2.new(0, 20, 0, 40)
-homeStatus.BackgroundTransparency = 1
-homeStatus.Text = os.date("%H:%M")
-homeStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
-homeStatus.Font = Enum.Font.GothamBold
-homeStatus.TextSize = 14
-homeStatus.TextXAlignment = Enum.TextXAlignment.Left
-homeStatus.ZIndex = 5
-homeStatus.Parent = PhoneHome
-
-fpsLabel = Instance.new("TextLabel")
-fpsLabel.Name = "FPSLabel"
-fpsLabel.Size = UDim2.new(0.5, -10, 0, 22)
-fpsLabel.Position = UDim2.new(0.5, 0, 0, 40)
-fpsLabel.BackgroundTransparency = 1
-fpsLabel.Text = "FPS: --"
-fpsLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
-fpsLabel.Font = Enum.Font.GothamBold
-fpsLabel.TextSize = 13
-fpsLabel.TextXAlignment = Enum.TextXAlignment.Right
-fpsLabel.Visible = false
-fpsLabel.ZIndex = 5
-fpsLabel.Parent = PhoneHome
+createStatusBar(PhoneHome)
 
 local homeTitle = Instance.new("TextLabel")
 homeTitle.Size = UDim2.new(1, 0, 0, 30)
@@ -1227,8 +1245,11 @@ local currentFps = 0
 
 task.spawn(function()
     while true do
-        if homeStatus and homeStatus.Parent then
-            homeStatus.Text = os.date("%H:%M")
+        local timeStr = os.date("%H:%M")
+        for _, clock in ipairs(statusClocks) do
+            if clock and clock.Parent then
+                clock.Text = timeStr
+            end
         end
         task.wait(1)
     end
@@ -1241,11 +1262,15 @@ RunService.RenderStepped:Connect(function()
         currentFps = math.floor(frameCount / (now - lastFpsUpdate))
         frameCount = 0
         lastFpsUpdate = now
-        if fpsLabel and phoneSettings.fpsEnabled then
-            fpsLabel.Text = "FPS: " .. currentFps
-            fpsLabel.Visible = true
-        elseif fpsLabel then
-            fpsLabel.Visible = false
+        for _, fps in ipairs(statusFpsLabels) do
+            if fps and fps.Parent then
+                if phoneSettings.fpsEnabled then
+                    fps.Text = "FPS: " .. currentFps
+                    fps.Visible = true
+                else
+                    fps.Visible = false
+                end
+            end
         end
     end
 end)
@@ -1367,9 +1392,11 @@ cameraDot.BorderSizePixel = 0
 cameraDot.Parent = MainFrame
 Instance.new("UICorner", cameraDot).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(MainFrame)
+
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
-TopBar.Position = UDim2.new(0, 0, 0, 38)
+TopBar.Position = UDim2.new(0, 0, 0, 58)
 TopBar.BackgroundTransparency = 1
 TopBar.Parent = MainFrame
 
@@ -1405,7 +1432,7 @@ titleStroke.Parent = MusicTitle
 
 local NowPlayingCard = Instance.new("Frame")
 NowPlayingCard.Size = UDim2.new(1, -24, 0, 118)
-NowPlayingCard.Position = UDim2.new(0, 12, 0, 88)
+NowPlayingCard.Position = UDim2.new(0, 12, 0, 105)
 NowPlayingCard.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 NowPlayingCard.BorderSizePixel = 0
 NowPlayingCard.Parent = MainFrame
@@ -1497,7 +1524,7 @@ timeLabelStroke.Parent = TimeLabel
 
 local Controls = Instance.new("Frame")
 Controls.Size = UDim2.new(1, -24, 0, 52)
-Controls.Position = UDim2.new(0, 12, 0, 218)
+Controls.Position = UDim2.new(0, 12, 0, 235)
 Controls.BackgroundTransparency = 1
 Controls.Parent = MainFrame
 
@@ -1529,7 +1556,7 @@ local RepeatBtn = createBtn("🔁", UDim2.new(1, -42, 0.5, -18), UDim2.new(0, 42
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -24, 0, 32)
-SearchBox.Position = UDim2.new(0, 12, 0, 278)
+SearchBox.Position = UDim2.new(0, 12, 0, 295)
 SearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 SearchBox.PlaceholderText = "🔍 Pesquisar música..."
 SearchBox.Text = ""
@@ -1544,8 +1571,8 @@ searchStroke.Thickness = 1.2
 searchStroke.Parent = SearchBox
 
 local ScrollList = Instance.new("ScrollingFrame")
-ScrollList.Size = UDim2.new(1, -24, 0, 90)
-ScrollList.Position = UDim2.new(0, 12, 0, 318)
+ScrollList.Size = UDim2.new(1, -24, 0, 70)
+ScrollList.Position = UDim2.new(0, 12, 0, 335)
 ScrollList.BackgroundTransparency = 1
 ScrollList.ScrollBarThickness = 3
 ScrollList.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
@@ -1556,7 +1583,7 @@ UIListLayout.Parent = ScrollList
 
 local IDInput = Instance.new("TextBox")
 IDInput.Size = UDim2.new(1, -24, 0, 34)
-IDInput.Position = UDim2.new(0, 12, 0, 318)
+IDInput.Position = UDim2.new(0, 12, 0, 335)
 IDInput.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 IDInput.PlaceholderText = "Digite o Sound ID do Roblox..."
 IDInput.Text = ""
@@ -1737,9 +1764,11 @@ swNotch.BorderSizePixel = 0
 swNotch.Parent = StopwatchFrame
 Instance.new("UICorner", swNotch).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(StopwatchFrame)
+
 local swTitle = Instance.new("TextLabel")
 swTitle.Size = UDim2.new(1, 0, 0, 30)
-swTitle.Position = UDim2.new(0, 0, 0, 50)
+swTitle.Position = UDim2.new(0, 0, 0, 58)
 swTitle.BackgroundTransparency = 1
 swTitle.Text = "⏱️ Cronômetro"
 swTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -1749,7 +1778,7 @@ swTitle.Parent = StopwatchFrame
 
 local swTimeLabel = Instance.new("TextLabel")
 swTimeLabel.Size = UDim2.new(1, -40, 0, 80)
-swTimeLabel.Position = UDim2.new(0, 20, 0, 120)
+swTimeLabel.Position = UDim2.new(0, 20, 0, 125)
 swTimeLabel.BackgroundTransparency = 1
 swTimeLabel.Text = "0:00:00:00.<font size=\"18\">00</font>"
 swTimeLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
@@ -1860,9 +1889,11 @@ cfgEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
 cfgEars.ZIndex = 10
 cfgEars.Parent = ConfigFrame
 
+createStatusBar(ConfigFrame)
+
 local cfgTitle = Instance.new("TextLabel")
 cfgTitle.Size = UDim2.new(1, 0, 0, 35)
-cfgTitle.Position = UDim2.new(0, 0, 0, 45)
+cfgTitle.Position = UDim2.new(0, 0, 0, 58)
 cfgTitle.BackgroundTransparency = 1
 cfgTitle.Text = "⚙️ Configurações"
 cfgTitle.TextColor3 = Color3.new(1,1,1)
@@ -1871,8 +1902,8 @@ cfgTitle.TextSize = 20
 cfgTitle.Parent = ConfigFrame
 
 local cfgScroll = Instance.new("ScrollingFrame")
-cfgScroll.Size = UDim2.new(1, -20, 1, -100)
-cfgScroll.Position = UDim2.new(0, 10, 0, 85)
+cfgScroll.Size = UDim2.new(1, -20, 1, -110)
+cfgScroll.Position = UDim2.new(0, 10, 0, 95)
 cfgScroll.BackgroundTransparency = 1
 cfgScroll.ScrollBarThickness = 4
 cfgScroll.Parent = ConfigFrame
@@ -1933,10 +1964,12 @@ local function createConfigToggle(title, desc, default, callback)
     return frame
 end
 
-createConfigToggle("FPS Counter", "Mostra o FPS na tela inicial do celular", false, function(on)
+createConfigToggle("FPS Counter", "Mostra o FPS em todas as telas do celular", false, function(on)
     phoneSettings.fpsEnabled = on
-    if fpsLabel then
-        fpsLabel.Visible = on
+    for _, fps in ipairs(statusFpsLabels) do
+        if fps and fps.Parent then
+            fps.Visible = on
+        end
     end
 end)
 
@@ -2057,9 +2090,11 @@ galNotch.BorderSizePixel = 0
 galNotch.Parent = GalleryFrame
 Instance.new("UICorner", galNotch).CornerRadius = UDim.new(1, 0)
 
+createStatusBar(GalleryFrame)
+
 local galTitle = Instance.new("TextLabel")
 galTitle.Size = UDim2.new(1, 0, 0, 30)
-galTitle.Position = UDim2.new(0, 0, 0, 42)
+galTitle.Position = UDim2.new(0, 0, 0, 58)
 galTitle.BackgroundTransparency = 1
 galTitle.Text = "🖼️ Galeria"
 galTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -2069,7 +2104,7 @@ galTitle.Parent = GalleryFrame
 
 local PhotoSearchBox = Instance.new("TextBox")
 PhotoSearchBox.Size = UDim2.new(1, -24, 0, 32)
-PhotoSearchBox.Position = UDim2.new(0, 12, 0, 80)
+PhotoSearchBox.Position = UDim2.new(0, 12, 0, 90)
 PhotoSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 PhotoSearchBox.PlaceholderText = "🔍 Pesquisar foto..."
 PhotoSearchBox.Text = ""
