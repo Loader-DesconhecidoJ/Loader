@@ -372,40 +372,11 @@ HotbarGui.Parent = game:GetService("CoreGui")
 local HotbarFrame = Instance.new("Frame")
 HotbarFrame.Name = "HotbarFrame"
 HotbarFrame.Size = UDim2.new(0, 152, 0, 40)
-HotbarFrame.Position = UDim2.new(1, -158, 1, -72)
+HotbarFrame.AnchorPoint = Vector2.new(1, 1)          -- ancora no canto inferior direito
+HotbarFrame.Position = UDim2.new(1, -12, 1, -18)     -- padding seguro da borda
 HotbarFrame.BackgroundTransparency = 1
 HotbarFrame.Visible = true
 HotbarFrame.Parent = HotbarGui
-
--- Escala adaptativa da Hotbar (maior em dispositivos touch + DPI)
-local hotbarUIScale = Instance.new("UIScale")
-hotbarUIScale.Parent = HotbarFrame
-local function updateHotbarScale()
-    local cam = Workspace.CurrentCamera
-    if cam then
-        local size = cam.ViewportSize
-        -- Base scale por resolução + fator DPI aproximado (pixels por unidade lógica)
-        local baseScale = math.clamp(math.min(size.X / 800, size.Y / 500), 0.70, 1.40)
-        if isTouchDevice then
-            baseScale = math.clamp(baseScale * 1.30, 0.90, 1.70)
-        end
-        -- Ajuste extra para telas muito largas / ultrawide e DPI alto
-        if size.X >= 1920 then
-            baseScale = math.clamp(baseScale * 1.08, 0.80, 1.55)
-        end
-        hotbarUIScale.Scale = baseScale
-    end
-end
-updateHotbarScale()
-if Workspace.CurrentCamera then
-    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateHotbarScale)
-end
-task.spawn(function()
-    while HotbarFrame and HotbarFrame.Parent do
-        updateHotbarScale()
-        task.wait(1.5)
-    end
-end)
 
 local slotsData = {
     {Name = "BloxyCola",  Emoji = "🥤", Color = Color3.fromRGB(255, 70, 70),   ToolName = "BloxyCola"},
@@ -422,6 +393,40 @@ for _, data in ipairs(slotsData) do
         table.insert(activeSlots, data)
     end
 end
+
+-- Escala adaptativa da Hotbar (maior em dispositivos touch + DPI)
+local hotbarUIScale = Instance.new("UIScale")
+hotbarUIScale.Parent = HotbarFrame
+local function updateHotbarScale()
+    local cam = Workspace.CurrentCamera
+    if cam then
+        local size = cam.ViewportSize
+        -- Base scale por resolução + fator DPI aproximado
+        local baseScale = math.clamp(math.min(size.X / 800, size.Y / 500), 0.70, 1.35)
+        if isTouchDevice then
+            baseScale = math.clamp(baseScale * 1.22, 0.85, 1.55)  -- um pouco mais conservador para não empurrar slots pra fora
+        end
+        -- Ajuste extra para telas muito largas / ultrawide
+        if size.X >= 1920 then
+            baseScale = math.clamp(baseScale * 1.05, 0.80, 1.45)
+        end
+        -- Se tiver 4 slots, limita um pouco mais a escala máxima para garantir que caiba
+        if #activeSlots >= 4 then
+            baseScale = math.min(baseScale, 1.40)
+        end
+        hotbarUIScale.Scale = baseScale
+    end
+end
+updateHotbarScale()
+if Workspace.CurrentCamera then
+    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateHotbarScale)
+end
+task.spawn(function()
+    while HotbarFrame and HotbarFrame.Parent do
+        updateHotbarScale()
+        task.wait(1.5)
+    end
+end)
 
 -- =========================================================
 -- FUNÇÕES DE ATIVAÇÃO / DESATIVAÇÃO (sem Tools)
@@ -936,8 +941,13 @@ for i, data in ipairs(activeSlots) do
 end
 
 if #activeSlots > 0 then
-    HotbarFrame.Size = UDim2.new(0, (#activeSlots * 38) + 4, 0, 40)
-    HotbarFrame.Position = UDim2.new(1, -((#activeSlots * 38) + 10), 1, -72)
+    -- Largura exata dos slots + pequeno padding interno
+    local totalWidth = (#activeSlots * 38) + 6
+    HotbarFrame.Size = UDim2.new(0, totalWidth, 0, 40)
+    -- AnchorPoint já é (1,1), então Position fica com padding fixo da borda direita/inferior
+    HotbarFrame.Position = UDim2.new(1, -12, 1, -18)
+    -- Reaplica escala agora que activeSlots está preenchido
+    updateHotbarScale()
 else
     HotbarFrame.Visible = false
 end
@@ -1427,9 +1437,11 @@ local function hideVolumeSmooth()
         BackgroundTransparency = 1
     })
     tween:Play()
-    tween.Completed:Once(function()
+    local conn
+    conn = tween.Completed:Connect(function()
         VolumeFrame.Visible = false
         VolumeFrame.BackgroundTransparency = 0.12
+        if conn then conn:Disconnect() end
     end)
 end
 
@@ -2627,8 +2639,10 @@ closePhone = function()
         if f.Visible then
             local tween = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = target})
             tween:Play()
-            tween.Completed:Once(function()
+            local conn
+            conn = tween.Completed:Connect(function()
                 f.Visible = false
+                if conn then conn:Disconnect() end
             end)
         end
     end
