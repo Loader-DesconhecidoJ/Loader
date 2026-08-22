@@ -191,20 +191,6 @@ local SETTINGS = {
     BoostFOV         = 90
 }
 
-local TOOL_IDS = {
-    BloxyCola = { MeshId = "rbxassetid://10470609", TextureId = "rbxassetid://10470600", HandleColor = "Really red" },
-    TzesPhone = { MeshId = "rbxassetid://130757014132786", TextureId = "rbxassetid://101684537135469", HandleColor = "Lime green" },
-    Lanterna  = { MeshId = "rbxassetid://137073484684190", TextureId = "rbxassetid://120980688754080", HandleColor = "Bright yellow" },
-    SprayCan  = { MeshId = "rbxassetid://102100150193796", TextureId = "5383116479", HandleColor = "Bright green" }
-}
-
-local TOOL_CONFIGS = {
-    BloxyCola = { Handle = { Size = Vector3.new(1,1,1), Material = Enum.Material.SmoothPlastic, Rotation = Vector3.new(0,0,0), Position = Vector3.new(0,0,0) }, Mesh = { Scale = Vector3.new(1.1,1.1,1.1) } },
-    TzesPhone = { Handle = { Size = Vector3.new(0.4,0.8,0.2), Material = Enum.Material.SmoothPlastic, Transparency = 0, Rotation = Vector3.new(0,490,0), Position = Vector3.new(0,-0.5,-0.5) }, Mesh = { Scale = Vector3.new(1,1,1) } },
-    Lanterna  = { Handle = { Size = Vector3.new(0.7,1.4,0.7), Material = Enum.Material.Neon, Transparency = 0, Rotation = Vector3.new(0,0,0), Position = Vector3.new(0,0,0) }, Mesh = { Scale = Vector3.new(1,1,1) }, LanternLight = { Brightness = 4, Range = 80, Angle = 60 } },
-    SprayCan = { Handle = { Size = Vector3.new(1.2,0.6,0.6), Material = Enum.Material.SmoothPlastic, Transparency = 0, Rotation = Vector3.new(0,0,0), Position = Vector3.new(0,0,-0.3) }, Mesh = { Scale = Vector3.new(1.1,1.1,1.1) }, Nozzle = { Size = Vector3.new(0.2,0.4,0.2), Position = Vector3.new(0,0,0.5) } }
-}
-
 local Player = game.Players.LocalPlayer
 local Character, Humanoid
 local originalWalkSpeed = 16
@@ -240,19 +226,17 @@ local phoneSettings = {
 local fpsLabel = nil
 local phoneFlashlight = nil
 
--- =========================================================
--- ESTADO DE EQUIPAMENTO VIA SLOT PERSONALIZADO (sem Tools)
--- =========================================================
+-- Estados de "equipamento" via hotbar (sem Tools)
 local equippedItem = nil          -- "BloxyCola" | "TzesPhone" | "Lanterna" | "TzeSprayCan" | nil
 local lanternLight = nil          -- SpotLight da lanterna
-local isLanternOn = false
-local isSprayEquipped = false
-local sprayGui = nil
-local sprayParticles = nil
-local spraySound = nil
-local sprayConnection = nil
-local isSprayActive = false
-local sprayNozzle = nil
+local sprayState = {              -- estado do spray
+    gui = nil,
+    particles = nil,
+    sound = nil,
+    connection = nil,
+    isActive = false,
+    nozzle = nil
+}
 
 local function createSounds()
     for _, sound in pairs(Player:WaitForChild("PlayerGui"):GetChildren()) do
@@ -309,28 +293,32 @@ local function cleanup()
         phoneFlashlight = nil
     end
 
-    -- Limpa lanterna e spray
+    -- Limpa lanterna e spray ao resetar personagem
     if lanternLight then
-        lanternLight:Destroy()
+        pcall(function() lanternLight:Destroy() end)
         lanternLight = nil
     end
-    isLanternOn = false
-
-    if isSprayActive then
-        isSprayActive = false
-        if sprayParticles then sprayParticles.Rate = 0 end
-        if spraySound then spraySound:Stop() end
-        if sprayConnection then sprayConnection:Disconnect() sprayConnection = nil end
+    if sprayState.gui then
+        pcall(function() sprayState.gui:Destroy() end)
+        sprayState.gui = nil
     end
-    if sprayGui then
-        sprayGui:Destroy()
-        sprayGui = nil
+    if sprayState.connection then
+        pcall(function() sprayState.connection:Disconnect() end)
+        sprayState.connection = nil
     end
-    if sprayNozzle then
-        sprayNozzle:Destroy()
-        sprayNozzle = nil
+    if sprayState.particles then
+        pcall(function() sprayState.particles:Destroy() end)
+        sprayState.particles = nil
     end
-    isSprayEquipped = false
+    if sprayState.sound then
+        pcall(function() sprayState.sound:Destroy() end)
+        sprayState.sound = nil
+    end
+    if sprayState.nozzle then
+        pcall(function() sprayState.nozzle:Destroy() end)
+        sprayState.nozzle = nil
+    end
+    sprayState.isActive = false
     equippedItem = nil
 end
 
@@ -372,8 +360,105 @@ local function updateMovementStats()
 end
 
 -- =========================================================
--- FUNÇÕES DE ATIVAÇÃO VIA SLOT (sem Tools)
+-- CUSTOM HOTBAR (só os slots selecionados) - SEM TOOLS
 -- =========================================================
+local HotbarGui = Instance.new("ScreenGui")
+HotbarGui.Name = "TzeCustomHotbar"
+HotbarGui.ResetOnSpawn = false
+HotbarGui.IgnoreGuiInset = true
+HotbarGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+HotbarGui.Parent = game:GetService("CoreGui")
+
+local HotbarFrame = Instance.new("Frame")
+HotbarFrame.Name = "HotbarFrame"
+HotbarFrame.Size = UDim2.new(0, 152, 0, 40)
+HotbarFrame.Position = UDim2.new(1, -158, 1, -72)
+HotbarFrame.BackgroundTransparency = 1
+HotbarFrame.Visible = true
+HotbarFrame.Parent = HotbarGui
+
+-- Escala adaptativa da Hotbar (maior em dispositivos touch)
+local hotbarUIScale = Instance.new("UIScale")
+hotbarUIScale.Parent = HotbarFrame
+local function updateHotbarScale()
+    local cam = Workspace.CurrentCamera
+    if cam then
+        local size = cam.ViewportSize
+        local baseScale = math.clamp(math.min(size.X / 800, size.Y / 500), 0.75, 1.35)
+        if isTouchDevice then
+            baseScale = math.clamp(baseScale * 1.25, 0.9, 1.6)
+        end
+        hotbarUIScale.Scale = baseScale
+    end
+end
+updateHotbarScale()
+if Workspace.CurrentCamera then
+    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateHotbarScale)
+end
+
+local slotsData = {
+    {Name = "BloxyCola",  Emoji = "🥤", Color = Color3.fromRGB(255, 70, 70),   ToolName = "BloxyCola"},
+    {Name = "TzesPhone",  Emoji = "📱", Color = Color3.fromRGB(50, 205, 50),   ToolName = "TzesPhone"},
+    {Name = "Lanterna",   Emoji = "🔦", Color = Color3.fromRGB(255, 200, 50),  ToolName = "Lanterna"},
+    {Name = "TzeSprayCan",Emoji = "🎨", Color = Color3.fromRGB(80, 180, 255),  ToolName = "TzeSprayCan"}
+}
+
+local slotButtons = {}
+local activeSlots = {}
+
+for _, data in ipairs(slotsData) do
+    if selectedItems[data.ToolName] then
+        table.insert(activeSlots, data)
+    end
+end
+
+-- =========================================================
+-- FUNÇÕES DE ATIVAÇÃO / DESATIVAÇÃO (sem Tools)
+-- =========================================================
+local closePhone, openPhone, togglePhone
+
+local function unequipAll()
+    -- Lanterna
+    if lanternLight then
+        pcall(function() lanternLight:Destroy() end)
+        lanternLight = nil
+    end
+
+    -- Spray
+    if sprayState.isActive then
+        sprayState.isActive = false
+        if sprayState.particles then sprayState.particles.Rate = 0 end
+        if sprayState.sound then sprayState.sound:Stop() end
+        if sprayState.connection then
+            pcall(function() sprayState.connection:Disconnect() end)
+            sprayState.connection = nil
+        end
+    end
+    if sprayState.gui then
+        pcall(function() sprayState.gui:Destroy() end)
+        sprayState.gui = nil
+    end
+    if sprayState.particles then
+        pcall(function() sprayState.particles:Destroy() end)
+        sprayState.particles = nil
+    end
+    if sprayState.sound then
+        pcall(function() sprayState.sound:Destroy() end)
+        sprayState.sound = nil
+    end
+    if sprayState.nozzle then
+        pcall(function() sprayState.nozzle:Destroy() end)
+        sprayState.nozzle = nil
+    end
+
+    -- Phone (fecha se estiver aberto)
+    if isPhoneOpen and closePhone then
+        closePhone()
+    end
+
+    equippedItem = nil
+end
+
 local function activateBloxyCola()
     if isDrinking or (os.clock() < drinkBoostEndTime) or not Humanoid or not Character then return end
     isDrinking = true
@@ -398,65 +483,79 @@ local function activateBloxyCola()
     end)
 end
 
-local closePhone, openPhone, togglePhone
-
-local function activatePhone()
-    if togglePhone then
-        togglePhone()
-    end
-end
-
-local function setLanternState(on)
-    isLanternOn = on
+local function activateLanterna()
     if not Character then return end
     local root = Character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    if on then
-        if lanternLight then lanternLight:Destroy() end
-        lanternLight = Instance.new("SpotLight")
-        lanternLight.Name = "LanternLight"
-        lanternLight.Brightness = TOOL_CONFIGS.Lanterna.LanternLight.Brightness
-        lanternLight.Range = TOOL_CONFIGS.Lanterna.LanternLight.Range
-        lanternLight.Angle = TOOL_CONFIGS.Lanterna.LanternLight.Angle
-        lanternLight.Face = Enum.NormalId.Front
-        lanternLight.Enabled = true
-        lanternLight.Parent = root
-
-        local clickSound = Instance.new("Sound")
-        clickSound.SoundId = "rbxassetid://135865643321210"
-        clickSound.Volume = 0.5
-        clickSound.Parent = root
-        clickSound:Play()
-        game:GetService("Debris"):AddItem(clickSound, 2)
-    else
-        if lanternLight then
-            lanternLight:Destroy()
-            lanternLight = nil
-        end
-        local clickSound = Instance.new("Sound")
-        clickSound.SoundId = "rbxassetid://135865643321210"
-        clickSound.Volume = 0.5
-        clickSound.Parent = root
-        clickSound:Play()
-        game:GetService("Debris"):AddItem(clickSound, 2)
+    if lanternLight then
+        pcall(function() lanternLight:Destroy() end)
+        lanternLight = nil
     end
+
+    lanternLight = Instance.new("SpotLight")
+    lanternLight.Name = "TzeLanternLight"
+    lanternLight.Brightness = 4
+    lanternLight.Range = 80
+    lanternLight.Angle = 60
+    lanternLight.Face = Enum.NormalId.Front
+    lanternLight.Enabled = true
+    lanternLight.Parent = root
 end
 
-local function toggleLantern()
-    setLanternState(not isLanternOn)
-end
+local function activateSpray()
+    if not Character then return end
+    local root = Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
 
-local function createSpraySystem()
-    if sprayGui then return end
+    -- Cria nozzle invisível soldado ao personagem
+    local nozzle = Instance.new("Part")
+    nozzle.Name = "TzeSprayNozzle"
+    nozzle.Size = Vector3.new(0.2, 0.4, 0.2)
+    nozzle.Transparency = 1
+    nozzle.CanCollide = false
+    nozzle.Massless = true
+    nozzle.Anchored = false
+    nozzle.Parent = Character
 
-    sprayGui = Instance.new("ScreenGui")
+    local weld = Instance.new("Weld")
+    weld.Part0 = root
+    weld.Part1 = nozzle
+    weld.C0 = CFrame.new(0, 0.5, -1.2)
+    weld.Parent = nozzle
+
+    sprayState.nozzle = nozzle
+
+    local sprayParticles = Instance.new("ParticleEmitter")
+    sprayParticles.Name = "SprayParticles"
+    sprayParticles.Texture = "rbxassetid://241650885"
+    sprayParticles.Color = ColorSequence.new(currentPaintColor)
+    sprayParticles.LightEmission = 0.8
+    sprayParticles.Rate = 0
+    sprayParticles.Lifetime = NumberRange.new(0.3, 0.6)
+    sprayParticles.Speed = NumberRange.new(60, 90)
+    sprayParticles.SpreadAngle = Vector2.new(15, 15)
+    sprayParticles.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0.1)})
+    sprayParticles.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1)})
+    sprayParticles.Parent = nozzle
+    sprayState.particles = sprayParticles
+
+    local spraySound = Instance.new("Sound")
+    spraySound.Name = "SpraySound"
+    spraySound.SoundId = "rbxassetid://135953747985183"
+    spraySound.Volume = 0.85
+    spraySound.Looped = true
+    spraySound.Parent = nozzle
+    sprayState.sound = spraySound
+
+    -- GUI do spray
+    local sprayGui = Instance.new("ScreenGui")
     sprayGui.Name = "SprayGui"
     sprayGui.ResetOnSpawn = false
     sprayGui.IgnoreGuiInset = true
     sprayGui.Parent = Player.PlayerGui
+    sprayState.gui = sprayGui
 
-    -- Escala adaptativa do Spray GUI
     local sprayUIScale = Instance.new("UIScale")
     sprayUIScale.Parent = sprayGui
     local function updateSprayScale()
@@ -610,8 +709,8 @@ local function createSpraySystem()
         
         cBtn.MouseButton1Click:Connect(function()
             currentPaintColor = col
-            if sprayParticles then
-                sprayParticles.Color = ColorSequence.new(col)
+            if sprayState.particles then
+                sprayState.particles.Color = ColorSequence.new(col)
             end
             colorBtn.BackgroundColor3 = col
             local closeTween = TweenService:Create(colorPicker, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
@@ -632,59 +731,17 @@ local function createSpraySystem()
         scroll.CanvasSize = UDim2.new(0, 0, 0, gridLayout.AbsoluteContentSize.Y + 20)
     end
     
-    -- Cria nozzle invisível no personagem para partículas e som
-    if Character then
-        local root = Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            if sprayNozzle then sprayNozzle:Destroy() end
-            sprayNozzle = Instance.new("Part")
-            sprayNozzle.Name = "SprayNozzle"
-            sprayNozzle.Size = Vector3.new(0.2, 0.2, 0.2)
-            sprayNozzle.Transparency = 1
-            sprayNozzle.CanCollide = false
-            sprayNozzle.Massless = true
-            sprayNozzle.Anchored = false
-            sprayNozzle.Parent = Character
-
-            local weld = Instance.new("Weld")
-            weld.Part0 = root
-            weld.Part1 = sprayNozzle
-            weld.C0 = CFrame.new(0, 0, -1.5)
-            weld.Parent = sprayNozzle
-
-            sprayParticles = Instance.new("ParticleEmitter")
-            sprayParticles.Name = "SprayParticles"
-            sprayParticles.Texture = "rbxassetid://241650885"
-            sprayParticles.Color = ColorSequence.new(currentPaintColor)
-            sprayParticles.LightEmission = 0.8
-            sprayParticles.Rate = 0
-            sprayParticles.Lifetime = NumberRange.new(0.3, 0.6)
-            sprayParticles.Speed = NumberRange.new(60, 90)
-            sprayParticles.SpreadAngle = Vector2.new(15, 15)
-            sprayParticles.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0.1)})
-            sprayParticles.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1)})
-            sprayParticles.Parent = sprayNozzle
-
-            spraySound = Instance.new("Sound")
-            spraySound.Name = "SpraySound"
-            spraySound.SoundId = "rbxassetid://135953747985183"
-            spraySound.Volume = 0.85
-            spraySound.Looped = true
-            spraySound.Parent = sprayNozzle
-        end
-    end
-
     local function startSprayingHold()
-        if isSprayActive then return end
-        isSprayActive = true
-        if sprayParticles then sprayParticles.Rate = 140 end
-        if spraySound then spraySound:Play() end
+        if sprayState.isActive then return end
+        sprayState.isActive = true
+        if sprayState.particles then sprayState.particles.Rate = 140 end
+        if sprayState.sound then sprayState.sound:Play() end
         sprayBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
         holdLabel.Text = "ATIVO"
         
-        if sprayConnection then sprayConnection:Disconnect() end
-        sprayConnection = RunService.Heartbeat:Connect(function()
-            if not isSprayActive or not Character then return end
+        if sprayState.connection then sprayState.connection:Disconnect() end
+        sprayState.connection = RunService.Heartbeat:Connect(function()
+            if not sprayState.isActive or not Character then return end
             
             local camera = Workspace.CurrentCamera
             local ray = camera:ViewportPointToRay(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
@@ -732,12 +789,14 @@ local function createSpraySystem()
     end
     
     local function stopSprayingHold()
-        if not isSprayActive then return end
-        isSprayActive = false
-        if sprayParticles then sprayParticles.Rate = 0 end
-        if spraySound then spraySound:Stop() end
-        if sprayConnection then sprayConnection:Disconnect() end
-        sprayConnection = nil
+        if not sprayState.isActive then return end
+        sprayState.isActive = false
+        if sprayState.particles then sprayState.particles.Rate = 0 end
+        if sprayState.sound then sprayState.sound:Stop() end
+        if sprayState.connection then
+            sprayState.connection:Disconnect()
+            sprayState.connection = nil
+        end
         sprayBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
         holdLabel.Text = "SEGURAR"
     end
@@ -761,115 +820,34 @@ local function createSpraySystem()
     TweenService:Create(buttonContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 20, 1, -290)}):Play()
 end
 
-local function destroySpraySystem()
-    if isSprayActive then
-        isSprayActive = false
-        if sprayParticles then sprayParticles.Rate = 0 end
-        if spraySound then spraySound:Stop() end
-        if sprayConnection then sprayConnection:Disconnect() sprayConnection = nil end
+local function equipItem(toolName)
+    if equippedItem == toolName then
+        -- Já está equipado → desequipa
+        unequipAll()
+        return
     end
-    if sprayGui then
-        sprayGui:Destroy()
-        sprayGui = nil
-    end
-    if sprayNozzle then
-        sprayNozzle:Destroy()
-        sprayNozzle = nil
-    end
-    sprayParticles = nil
-    spraySound = nil
-    isSprayEquipped = false
-end
 
-local function equipItem(itemName)
-    -- Desequipa o anterior se for diferente
-    if equippedItem and equippedItem ~= itemName then
-        if equippedItem == "TzesPhone" and isPhoneOpen and closePhone then
-            closePhone()
-        elseif equippedItem == "Lanterna" then
-            setLanternState(false)
-        elseif equippedItem == "TzeSprayCan" then
-            destroySpraySystem()
+    -- Desequipa o anterior
+    unequipAll()
+
+    equippedItem = toolName
+
+    if toolName == "BloxyCola" then
+        activateBloxyCola()
+        -- Cola é uso único, já desequipa depois do uso
+        task.delay(0.1, function()
+            if equippedItem == "BloxyCola" then
+                equippedItem = nil
+            end
+        end)
+    elseif toolName == "TzesPhone" then
+        if togglePhone then
+            togglePhone()
         end
-    end
-
-    if equippedItem == itemName then
-        -- Já estava equipado → desequipa
-        if itemName == "TzesPhone" and isPhoneOpen and closePhone then
-            closePhone()
-        elseif itemName == "Lanterna" then
-            setLanternState(false)
-        elseif itemName == "TzeSprayCan" then
-            destroySpraySystem()
-        end
-        equippedItem = nil
-    else
-        -- Equipa novo
-        equippedItem = itemName
-
-        if itemName == "BloxyCola" then
-            activateBloxyCola()
-        elseif itemName == "TzesPhone" then
-            activatePhone()
-        elseif itemName == "Lanterna" then
-            setLanternState(true)
-        elseif itemName == "TzeSprayCan" then
-            isSprayEquipped = true
-            createSpraySystem()
-        end
-    end
-end
-
--- =========================================================
--- CUSTOM HOTBAR (só os slots selecionados)
--- =========================================================
-local HotbarGui = Instance.new("ScreenGui")
-HotbarGui.Name = "TzeCustomHotbar"
-HotbarGui.ResetOnSpawn = false
-HotbarGui.IgnoreGuiInset = true
-HotbarGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-HotbarGui.Parent = game:GetService("CoreGui")
-
-local HotbarFrame = Instance.new("Frame")
-HotbarFrame.Name = "HotbarFrame"
-HotbarFrame.Size = UDim2.new(0, 152, 0, 40)
-HotbarFrame.Position = UDim2.new(1, -158, 1, -72)
-HotbarFrame.BackgroundTransparency = 1
-HotbarFrame.Visible = true
-HotbarFrame.Parent = HotbarGui
-
--- Escala adaptativa da Hotbar (maior em dispositivos touch)
-local hotbarUIScale = Instance.new("UIScale")
-hotbarUIScale.Parent = HotbarFrame
-local function updateHotbarScale()
-    local cam = Workspace.CurrentCamera
-    if cam then
-        local size = cam.ViewportSize
-        local baseScale = math.clamp(math.min(size.X / 800, size.Y / 500), 0.75, 1.35)
-        if isTouchDevice then
-            baseScale = math.clamp(baseScale * 1.25, 0.9, 1.6)
-        end
-        hotbarUIScale.Scale = baseScale
-    end
-end
-updateHotbarScale()
-if Workspace.CurrentCamera then
-    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateHotbarScale)
-end
-
-local slotsData = {
-    {Name = "BloxyCola",  Emoji = "🥤", Color = Color3.fromRGB(255, 70, 70),   ToolName = "BloxyCola"},
-    {Name = "TzesPhone",  Emoji = "📱", Color = Color3.fromRGB(50, 205, 50),   ToolName = "TzesPhone"},
-    {Name = "Lanterna",   Emoji = "🔦", Color = Color3.fromRGB(255, 200, 50),  ToolName = "Lanterna"},
-    {Name = "TzeSprayCan",Emoji = "🎨", Color = Color3.fromRGB(80, 180, 255),  ToolName = "TzeSprayCan"}
-}
-
-local slotButtons = {}
-local activeSlots = {}
-
-for _, data in ipairs(slotsData) do
-    if selectedItems[data.ToolName] then
-        table.insert(activeSlots, data)
+    elseif toolName == "Lanterna" then
+        activateLanterna()
+    elseif toolName == "TzeSprayCan" then
+        activateSpray()
     end
 end
 
@@ -966,7 +944,7 @@ end
 task.spawn(function()
     while true do
         updateHotbarSelection()
-        task.wait(0.3)
+        task.wait(0.15)
     end
 end)
 
@@ -1226,7 +1204,7 @@ local function createAppIcon(name, emoji, color, pos)
     emojiLabel.Parent = bg
 
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
     nameLabel.Position = UDim2.new(0, 0, 1, -22)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = name
@@ -2483,6 +2461,11 @@ closePhone = function()
     isMusicOpen = false
     currentApp = "home"
     updateMovementStats()
+
+    -- Se o phone estava equipado via hotbar, desequipa
+    if equippedItem == "TzesPhone" then
+        equippedItem = nil
+    end
 end
 
 openPhone = function()
@@ -2595,7 +2578,7 @@ refreshPhotos()
 end -- fim do if selectedItems.TzesPhone
 
 -- =========================================================
--- CHARACTER SETUP (sem criação de Tools)
+-- CHARACTER HANDLING (sem criação de Tools)
 -- =========================================================
 local function onCharacterAdded(char)
     cleanup()
@@ -2614,8 +2597,6 @@ local function onCharacterAdded(char)
     createSounds()
 
     Humanoid.JumpPower = SETTINGS.JumpPower
-
-    -- Nenhum Tool é criado. Tudo funciona apenas pelos slots da hotbar.
 end
 
 Player.CharacterRemoving:Connect(cleanup)
