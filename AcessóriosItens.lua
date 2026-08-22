@@ -1,16 +1,4 @@
 -- =========================================================
--- FALLBACK TASK (executors antigos)
--- =========================================================
-if not task then
-    task = {
-        wait = function(t) return wait(t) end,
-        spawn = function(fn) return spawn(fn) end,
-        delay = function(t, fn) return delay(t, fn) end,
-        defer = function(fn) return spawn(fn) end,
-    }
-end
-
--- =========================================================
 -- MENU DE SELEÇÃO INICIAL
 -- =========================================================
 local selectedItems = {
@@ -54,9 +42,7 @@ do
         local cam = Workspace.CurrentCamera
         if cam then
             local size = cam.ViewportSize
-            local base = math.min(size.X / 420, size.Y / 320)
-            local dpiFactor = math.clamp(size.Y / 900, 0.75, 1.3)
-            local scale = math.clamp(base * dpiFactor, 0.6, 1.5)
+            local scale = math.clamp(math.min(size.X / 420, size.Y / 320), 0.65, 1.4)
             selectUIScale.Scale = scale
         end
     end
@@ -398,11 +384,9 @@ local function updateHotbarScale()
     local cam = Workspace.CurrentCamera
     if cam then
         local size = cam.ViewportSize
-        local base = math.min(size.X / 800, size.Y / 500)
-        local dpiFactor = math.clamp(size.Y / 900, 0.75, 1.3)
-        local baseScale = math.clamp(base * dpiFactor, 0.7, 1.4)
+        local baseScale = math.clamp(math.min(size.X / 800, size.Y / 500), 0.75, 1.35)
         if isTouchDevice then
-            baseScale = math.clamp(baseScale * 1.22, 0.85, 1.65)
+            baseScale = math.clamp(baseScale * 1.25, 0.9, 1.6)
         end
         hotbarUIScale.Scale = baseScale
     end
@@ -578,11 +562,9 @@ local function activateSpray()
         local cam = Workspace.CurrentCamera
         if cam then
             local size = cam.ViewportSize
-            local base = math.min(size.X / 700, size.Y / 500)
-            local dpiFactor = math.clamp(size.Y / 900, 0.75, 1.35)
-            local scale = math.clamp(base * dpiFactor, 0.65, 1.55)
+            local scale = math.clamp(math.min(size.X / 700, size.Y / 500), 0.7, 1.4)
             if isTouchDevice then
-                scale = math.clamp(scale * 1.12, 0.8, 1.65)
+                scale = math.clamp(scale * 1.15, 0.85, 1.5)
             end
             sprayUIScale.Scale = scale
         end
@@ -591,6 +573,8 @@ local function activateSpray()
     if Workspace.CurrentCamera then
         Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateSprayScale)
     end
+
+    -- REMOVIDO: overlay preto atrás dos botões
 
     local crosshair = Instance.new("Frame")
     crosshair.Size = UDim2.new(0, 4, 0, 4)
@@ -609,52 +593,52 @@ local function activateSpray()
     crosshairRing.Parent = sprayGui
     Instance.new("UICorner", crosshairRing).CornerRadius = UDim.new(1, 0)
 
-    -- Botões mais próximos e layout adaptativo (sem overlay)
+    -- Botões mais próximos entre si
     local buttonContainer = Instance.new("Frame")
-    buttonContainer.Size = UDim2.new(0, 78, 0, 230)
-    buttonContainer.Position = UDim2.new(0, 14, 1, -250)
+    buttonContainer.Size = UDim2.new(0, 90, 0, 230)
+    buttonContainer.Position = UDim2.new(0, 20, 1, -250)
     buttonContainer.BackgroundTransparency = 1
     buttonContainer.Parent = sprayGui
 
     local sprayBtn = Instance.new("TextButton")
-    sprayBtn.Size = UDim2.new(0, 70, 0, 70)
-    sprayBtn.Position = UDim2.new(0, 4, 0, 0)
+    sprayBtn.Size = UDim2.new(0, 80, 0, 80)
+    sprayBtn.Position = UDim2.new(0, 5, 0, 0)
     sprayBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
     sprayBtn.Text = "💨"
     sprayBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sprayBtn.TextSize = 42
+    sprayBtn.TextSize = 48
     sprayBtn.Font = Enum.Font.GothamBold
     sprayBtn.Parent = buttonContainer
     Instance.new("UICorner", sprayBtn).CornerRadius = UDim.new(1, 0)
     
     local holdLabel = Instance.new("TextLabel")
-    holdLabel.Size = UDim2.new(1, 0, 0, 18)
-    holdLabel.Position = UDim2.new(0, 0, 1, -20)
+    holdLabel.Size = UDim2.new(1, 0, 0, 20)
+    holdLabel.Position = UDim2.new(0, 0, 1, -24)
     holdLabel.BackgroundTransparency = 1
     holdLabel.Text = "SEGURAR"
     holdLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     holdLabel.Font = Enum.Font.GothamBold
-    holdLabel.TextSize = 11
+    holdLabel.TextSize = 12
     holdLabel.Parent = sprayBtn
 
     local colorBtn = Instance.new("TextButton")
-    colorBtn.Size = UDim2.new(0, 56, 0, 56)
-    colorBtn.Position = UDim2.new(0, 11, 0, 80)
+    colorBtn.Size = UDim2.new(0, 64, 0, 64)
+    colorBtn.Position = UDim2.new(0, 13, 0, 90)
     colorBtn.BackgroundColor3 = currentPaintColor
     colorBtn.Text = "🎨"
     colorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    colorBtn.TextSize = 28
+    colorBtn.TextSize = 32
     colorBtn.Font = Enum.Font.GothamBold
     colorBtn.Parent = buttonContainer
     Instance.new("UICorner", colorBtn).CornerRadius = UDim.new(1, 0)
 
     local clearBtn = Instance.new("TextButton")
-    clearBtn.Size = UDim2.new(0, 56, 0, 56)
-    clearBtn.Position = UDim2.new(0, 11, 0, 146)
+    clearBtn.Size = UDim2.new(0, 64, 0, 64)
+    clearBtn.Position = UDim2.new(0, 13, 0, 164)
     clearBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
     clearBtn.Text = "🗑️"
     clearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    clearBtn.TextSize = 28
+    clearBtn.TextSize = 32
     clearBtn.Font = Enum.Font.GothamBold
     clearBtn.Parent = buttonContainer
     Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(1, 0)
@@ -829,7 +813,7 @@ local function activateSpray()
         clearBtn.BackgroundColor3 = origColor
     end)
     
-    TweenService:Create(buttonContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 14, 1, -250)}):Play()
+    TweenService:Create(buttonContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 20, 1, -250)}):Play()
 end
 
 local function equipItem(toolName)
@@ -982,11 +966,9 @@ local function updatePhoneScale()
     local cam = Workspace.CurrentCamera
     if not cam then return end
     local size = cam.ViewportSize
-    local base = math.min(size.X / 380, size.Y / 620)
-    local dpiFactor = math.clamp(size.Y / 900, 0.7, 1.3)
-    local scale = math.clamp(base * dpiFactor, 0.5, 1.35)
+    local scale = math.clamp(math.min(size.X / 380, size.Y / 620), 0.55, 1.25)
     if isTouchDevice then
-        scale = math.clamp(scale * 1.08, 0.55, 1.45)
+        scale = math.clamp(scale * 1.05, 0.6, 1.35)
     end
     phoneUIScale.Scale = scale
 end
@@ -1018,6 +1000,7 @@ local currentApp = "home"
 local photoList = {}
 local filteredPhotoList = {}
 local isInPhotoViewer = false
+local currentPhotoIndex = 0
 
 local function createNavBar(parent)
     local navBar = Instance.new("Frame")
@@ -1080,7 +1063,7 @@ local function createNavBar(parent)
     return homeBtn, backBtn
 end
 
--- ========== PHONE HOME SCREEN ==========
+-- ========== PHONE HOME SCREEN (posicionado à DIREITA) ==========
 local PhoneHome = Instance.new("Frame")
 PhoneHome.Name = "PhoneHome"
 PhoneHome.Size = UDim2.new(0, 280, 0, 440)
@@ -1339,7 +1322,7 @@ local function attachVolumeTo(frame)
     VolumeFrame.Visible = true
 end
 
--- ========== MUSIC PLAYER ==========
+-- ========== MUSIC PLAYER (direita) ==========
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 280, 0, 440)
 MainFrame.Position = UDim2.new(1, -300, 0.5, -220)
@@ -1717,7 +1700,7 @@ local function refreshFiles()
     updateMusicList()
 end
 
--- ========== CRONÔMETRO ==========
+-- ========== CRONÔMETRO (direita) ==========
 local StopwatchFrame = Instance.new("Frame")
 StopwatchFrame.Name = "StopwatchFrame"
 StopwatchFrame.Size = UDim2.new(0, 280, 0, 440)
@@ -1848,7 +1831,7 @@ swResetBtn.MouseButton1Click:Connect(function()
     if swConnection then swConnection:Disconnect() swConnection = nil end
 end)
 
--- ========== CONFIG APP ==========
+-- ========== CONFIG APP (direita) ==========
 local ConfigFrame = Instance.new("Frame")
 ConfigFrame.Name = "ConfigFrame"
 ConfigFrame.Size = UDim2.new(0, 280, 0, 440)
@@ -2037,7 +2020,7 @@ end)
 
 local cfgNavBtn, cfgBackBtn = createNavBar(ConfigFrame)
 
--- ========== GALERIA APP ==========
+-- ========== GALERIA APP (direita) ==========
 local GalleryFrame = Instance.new("Frame")
 GalleryFrame.Name = "GalleryFrame"
 GalleryFrame.Size = UDim2.new(0, 280, 0, 440)
@@ -2116,159 +2099,63 @@ PhotoUIGridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 PhotoUIGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PhotoUIGridLayout.Parent = PhotoScrollList
 
--- Viewer de foto (zoom + pan + next/prev)
+-- Viewer de foto (zoom)
 local PhotoViewerView = Instance.new("Frame")
 PhotoViewerView.Name = "PhotoViewerView"
 PhotoViewerView.Size = UDim2.new(1, 0, 1, 0)
 PhotoViewerView.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 PhotoViewerView.BorderSizePixel = 0
 PhotoViewerView.Visible = false
-PhotoViewerView.ClipsDescendants = true
 PhotoViewerView.Parent = GalleryFrame
 Instance.new("UICorner", PhotoViewerView).CornerRadius = UDim.new(0, 28)
 
-local PhotoClip = Instance.new("Frame")
-PhotoClip.Name = "PhotoClip"
-PhotoClip.Size = UDim2.new(1, -16, 1, -110)
-PhotoClip.Position = UDim2.new(0, 8, 0, 36)
-PhotoClip.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-PhotoClip.BackgroundTransparency = 0.25
-PhotoClip.BorderSizePixel = 0
-PhotoClip.ClipsDescendants = true
-PhotoClip.Parent = PhotoViewerView
-Instance.new("UICorner", PhotoClip).CornerRadius = UDim.new(0, 12)
-
 local PhotoDisplay = Instance.new("ImageLabel")
 PhotoDisplay.Name = "PhotoDisplay"
-PhotoDisplay.Size = UDim2.new(1, 0, 1, 0)
-PhotoDisplay.Position = UDim2.new(0, 0, 0, 0)
-PhotoDisplay.BackgroundTransparency = 1
+PhotoDisplay.Size = UDim2.new(1, -16, 1, -110)
+PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
+PhotoDisplay.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+PhotoDisplay.BackgroundTransparency = 0.3
 PhotoDisplay.BorderSizePixel = 0
 PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-PhotoDisplay.Active = true
-PhotoDisplay.Parent = PhotoClip
+PhotoDisplay.Parent = PhotoViewerView
+Instance.new("UICorner", PhotoDisplay).CornerRadius = UDim.new(0, 12)
 
 local PhotoNameLabel = Instance.new("TextLabel")
-PhotoNameLabel.Size = UDim2.new(1, -100, 0, 24)
-PhotoNameLabel.Position = UDim2.new(0, 50, 1, -68)
+PhotoNameLabel.Size = UDim2.new(1, -20, 0, 24)
+PhotoNameLabel.Position = UDim2.new(0, 10, 1, -95)
 PhotoNameLabel.BackgroundTransparency = 1
 PhotoNameLabel.Text = ""
 PhotoNameLabel.TextColor3 = Color3.new(1, 1, 1)
 PhotoNameLabel.Font = Enum.Font.GothamBold
-PhotoNameLabel.TextSize = 13
+PhotoNameLabel.TextSize = 14
 PhotoNameLabel.TextXAlignment = Enum.TextXAlignment.Center
 PhotoNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-PhotoNameLabel.ZIndex = 5
 PhotoNameLabel.Parent = PhotoViewerView
 
--- Controles do viewer
-local currentPhotoIndex = 0
-local photoZoom = 1
-local photoDragStart = nil
-local photoPosStart = nil
-local isDraggingPhoto = false
+-- Botões de navegação da galeria (anterior / próxima)
+local prevPhotoBtn = Instance.new("TextButton")
+prevPhotoBtn.Name = "PrevPhoto"
+prevPhotoBtn.Size = UDim2.new(0, 70, 0, 36)
+prevPhotoBtn.Position = UDim2.new(0, 20, 1, -55)
+prevPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+prevPhotoBtn.Text = "◀ Anterior"
+prevPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+prevPhotoBtn.Font = Enum.Font.GothamBold
+prevPhotoBtn.TextSize = 13
+prevPhotoBtn.Parent = PhotoViewerView
+Instance.new("UICorner", prevPhotoBtn).CornerRadius = UDim.new(0, 10)
 
-local function resetPhotoZoom()
-    photoZoom = 1
-    PhotoDisplay.Size = UDim2.new(1, 0, 1, 0)
-    PhotoDisplay.Position = UDim2.new(0, 0, 0, 0)
-    PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-end
-
-local function applyPhotoZoom()
-    local baseW = PhotoClip.AbsoluteSize.X
-    local baseH = PhotoClip.AbsoluteSize.Y
-    if baseW <= 0 or baseH <= 0 then return end
-    PhotoDisplay.Size = UDim2.new(0, baseW * photoZoom, 0, baseH * photoZoom)
-    -- Centraliza se zoom == 1
-    if photoZoom <= 1.01 then
-        PhotoDisplay.Position = UDim2.new(0.5, -baseW * photoZoom / 2, 0.5, -baseH * photoZoom / 2)
-        PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-    else
-        PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-        -- Mantém posição relativa ao centro se possível
-        local cx = PhotoDisplay.Position.X.Offset + PhotoDisplay.AbsoluteSize.X / 2
-        local cy = PhotoDisplay.Position.Y.Offset + PhotoDisplay.AbsoluteSize.Y / 2
-        PhotoDisplay.Position = UDim2.new(0, cx - (baseW * photoZoom) / 2, 0, cy - (baseH * photoZoom) / 2)
-    end
-end
-
-local function clampPhotoPosition()
-    local clipW = PhotoClip.AbsoluteSize.X
-    local clipH = PhotoClip.AbsoluteSize.Y
-    local imgW = PhotoDisplay.AbsoluteSize.X
-    local imgH = PhotoDisplay.AbsoluteSize.Y
-    local x = PhotoDisplay.Position.X.Offset
-    local y = PhotoDisplay.Position.Y.Offset
-
-    if imgW <= clipW then
-        x = (clipW - imgW) / 2
-    else
-        x = math.clamp(x, clipW - imgW, 0)
-    end
-    if imgH <= clipH then
-        y = (clipH - imgH) / 2
-    else
-        y = math.clamp(y, clipH - imgH, 0)
-    end
-    PhotoDisplay.Position = UDim2.new(0, x, 0, y)
-end
-
--- Botão anterior
-local PrevPhotoBtn = Instance.new("TextButton")
-PrevPhotoBtn.Name = "PrevPhoto"
-PrevPhotoBtn.Size = UDim2.new(0, 36, 0, 36)
-PrevPhotoBtn.Position = UDim2.new(0, 10, 1, -72)
-PrevPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-PrevPhotoBtn.Text = "◀"
-PrevPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-PrevPhotoBtn.TextSize = 18
-PrevPhotoBtn.Font = Enum.Font.GothamBold
-PrevPhotoBtn.ZIndex = 6
-PrevPhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", PrevPhotoBtn).CornerRadius = UDim.new(0, 10)
-
--- Botão próximo
-local NextPhotoBtn = Instance.new("TextButton")
-NextPhotoBtn.Name = "NextPhoto"
-NextPhotoBtn.Size = UDim2.new(0, 36, 0, 36)
-NextPhotoBtn.Position = UDim2.new(1, -46, 1, -72)
-NextPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-NextPhotoBtn.Text = "▶"
-NextPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-NextPhotoBtn.TextSize = 18
-NextPhotoBtn.Font = Enum.Font.GothamBold
-NextPhotoBtn.ZIndex = 6
-NextPhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", NextPhotoBtn).CornerRadius = UDim.new(0, 10)
-
--- Zoom -
-local ZoomOutBtn = Instance.new("TextButton")
-ZoomOutBtn.Name = "ZoomOut"
-ZoomOutBtn.Size = UDim2.new(0, 36, 0, 36)
-ZoomOutBtn.Position = UDim2.new(0.5, -44, 1, -72)
-ZoomOutBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-ZoomOutBtn.Text = "-"
-ZoomOutBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ZoomOutBtn.TextSize = 22
-ZoomOutBtn.Font = Enum.Font.GothamBold
-ZoomOutBtn.ZIndex = 6
-ZoomOutBtn.Parent = PhotoViewerView
-Instance.new("UICorner", ZoomOutBtn).CornerRadius = UDim.new(0, 10)
-
--- Zoom +
-local ZoomInBtn = Instance.new("TextButton")
-ZoomInBtn.Name = "ZoomIn"
-ZoomInBtn.Size = UDim2.new(0, 36, 0, 36)
-ZoomInBtn.Position = UDim2.new(0.5, 8, 1, -72)
-ZoomInBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-ZoomInBtn.Text = "+"
-ZoomInBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ZoomInBtn.TextSize = 20
-ZoomInBtn.Font = Enum.Font.GothamBold
-ZoomInBtn.ZIndex = 6
-ZoomInBtn.Parent = PhotoViewerView
-Instance.new("UICorner", ZoomInBtn).CornerRadius = UDim.new(0, 10)
+local nextPhotoBtn = Instance.new("TextButton")
+nextPhotoBtn.Name = "NextPhoto"
+nextPhotoBtn.Size = UDim2.new(0, 70, 0, 36)
+nextPhotoBtn.Position = UDim2.new(1, -90, 1, -55)
+nextPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+nextPhotoBtn.Text = "Próxima ▶"
+nextPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+nextPhotoBtn.Font = Enum.Font.GothamBold
+nextPhotoBtn.TextSize = 13
+nextPhotoBtn.Parent = PhotoViewerView
+Instance.new("UICorner", nextPhotoBtn).CornerRadius = UDim.new(0, 10)
 
 local galNavBtn, galBackBtn = createNavBar(GalleryFrame)
 
@@ -2280,20 +2167,23 @@ local function exitPhotoViewer()
     galTitle.Visible = true
     PhotoDisplay.Image = ""
     PhotoNameLabel.Text = ""
-    resetPhotoZoom()
     currentPhotoIndex = 0
 end
 
-local function loadPhotoByIndex(idx)
+local function openPhotoByIndex(idx)
     if #filteredPhotoList == 0 then return end
     if idx < 1 then idx = #filteredPhotoList end
     if idx > #filteredPhotoList then idx = 1 end
     currentPhotoIndex = idx
+
     local photo = filteredPhotoList[idx]
-    if not photo then return end
+    isInPhotoViewer = true
+    PhotoViewerView.Visible = true
+    PhotoScrollList.Visible = false
+    PhotoSearchBox.Visible = false
+    galTitle.Visible = false
 
     PhotoNameLabel.Text = (photo.name or "Foto") .. "  (" .. idx .. "/" .. #filteredPhotoList .. ")"
-    resetPhotoZoom()
 
     local success, asset = pcall(function()
         return getcustomasset(photo.path)
@@ -2302,87 +2192,33 @@ local function loadPhotoByIndex(idx)
     if success and asset then
         PhotoDisplay.Image = asset
         PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-        task.defer(function()
-            applyPhotoZoom()
-            clampPhotoPosition()
-        end)
     else
         PhotoNameLabel.Text = "Erro ao carregar foto"
         PhotoDisplay.Image = ""
     end
 end
 
-local function openPhoto(path, name, index)
-    isInPhotoViewer = true
-    PhotoViewerView.Visible = true
-    PhotoScrollList.Visible = false
-    PhotoSearchBox.Visible = false
-    galTitle.Visible = false
-
-    currentPhotoIndex = index or 1
-    loadPhotoByIndex(currentPhotoIndex)
+local function openPhoto(path, name)
+    -- encontra o índice da foto na lista filtrada
+    local foundIdx = 1
+    for i, p in ipairs(filteredPhotoList) do
+        if p.path == path then
+            foundIdx = i
+            break
+        end
+    end
+    openPhotoByIndex(foundIdx)
 end
 
--- Navegação próxima / anterior
-PrevPhotoBtn.MouseButton1Click:Connect(function()
-    if #filteredPhotoList == 0 then return end
-    loadPhotoByIndex(currentPhotoIndex - 1)
-end)
-
-NextPhotoBtn.MouseButton1Click:Connect(function()
-    if #filteredPhotoList == 0 then return end
-    loadPhotoByIndex(currentPhotoIndex + 1)
-end)
-
--- Zoom
-ZoomInBtn.MouseButton1Click:Connect(function()
-    photoZoom = math.clamp(photoZoom + 0.35, 1, 5)
-    applyPhotoZoom()
-    clampPhotoPosition()
-end)
-
-ZoomOutBtn.MouseButton1Click:Connect(function()
-    photoZoom = math.clamp(photoZoom - 0.35, 1, 5)
-    applyPhotoZoom()
-    clampPhotoPosition()
-end)
-
--- Arrastar a foto (pan)
-PhotoDisplay.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        if photoZoom > 1.01 then
-            isDraggingPhoto = true
-            photoDragStart = Vector2.new(input.Position.X, input.Position.Y)
-            photoPosStart = Vector2.new(PhotoDisplay.Position.X.Offset, PhotoDisplay.Position.Y.Offset)
-        end
+prevPhotoBtn.MouseButton1Click:Connect(function()
+    if #filteredPhotoList > 0 then
+        openPhotoByIndex(currentPhotoIndex - 1)
     end
 end)
 
-PhotoDisplay.InputChanged:Connect(function(input)
-    if isDraggingPhoto and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = Vector2.new(input.Position.X, input.Position.Y) - photoDragStart
-        PhotoDisplay.Position = UDim2.new(0, photoPosStart.X + delta.X, 0, photoPosStart.Y + delta.Y)
-        clampPhotoPosition()
-    end
-end)
-
-PhotoDisplay.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isDraggingPhoto = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if not isInPhotoViewer then return end
-    if input.UserInputType == Enum.UserInputType.MouseWheel then
-        local dir = input.Position.Z
-        if dir > 0 then
-            photoZoom = math.clamp(photoZoom + 0.25, 1, 5)
-        else
-            photoZoom = math.clamp(photoZoom - 0.25, 1, 5)
-        end
-        applyPhotoZoom()
-        clampPhotoPosition()
+nextPhotoBtn.MouseButton1Click:Connect(function()
+    if #filteredPhotoList > 0 then
+        openPhotoByIndex(currentPhotoIndex + 1)
     end
 end)
 
@@ -2433,7 +2269,7 @@ local function updatePhotoList()
             end)
 
             thumbBtn.MouseButton1Click:Connect(function()
-                openPhoto(photo.path, photo.name, idx)
+                openPhoto(photo.path, photo.name)
             end)
 
             thumbBtn.MouseEnter:Connect(function()
@@ -2662,7 +2498,7 @@ closePhone = function()
     isInPhotoViewer = false
     exitPhotoViewer()
 
-    local target = UDim2.new(1, 40, 0.5, -220)
+    local target = UDim2.new(1, -300, 1, 80)
     local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame}
     for _, f in ipairs(frames) do
         if f.Visible then
@@ -2688,7 +2524,7 @@ end
 openPhone = function()
     isPhoneOpen = true
     openHomeScreen()
-    PhoneHome.Position = UDim2.new(1, 40, 0.5, -220)
+    PhoneHome.Position = UDim2.new(1, -300, 1, 80)
     PhoneHome.Visible = true
     local target = UDim2.new(1, -300, 0.5, -220)
     local tween = TweenService:Create(PhoneHome, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = target})
