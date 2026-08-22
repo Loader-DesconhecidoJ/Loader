@@ -1002,6 +1002,98 @@ local filteredPhotoList = {}
 local isInPhotoViewer = false
 local currentPhotoIndex = 0
 
+-- Status bar shared data (WiFi + Bateria falsos + Relógio)
+local statusClockLabels = {}
+local statusWifiLabels = {}
+local statusBatteryLabels = {}
+local fakeBatteryPercent = 87
+local fakeWifiStrength = 3 -- 0 a 4
+
+local function createStatusBar(parent)
+    -- Relógio (esquerda)
+    local clock = Instance.new("TextLabel")
+    clock.Name = "StatusClock"
+    clock.Size = UDim2.new(0, 55, 0, 20)
+    clock.Position = UDim2.new(0, 18, 0, 40)
+    clock.BackgroundTransparency = 1
+    clock.Text = os.date("%H:%M")
+    clock.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clock.Font = Enum.Font.GothamBold
+    clock.TextSize = 13
+    clock.TextXAlignment = Enum.TextXAlignment.Left
+    clock.ZIndex = 8
+    clock.Parent = parent
+    table.insert(statusClockLabels, clock)
+
+    -- WiFi falso (direita)
+    local wifi = Instance.new("TextLabel")
+    wifi.Name = "StatusWifi"
+    wifi.Size = UDim2.new(0, 28, 0, 20)
+    wifi.Position = UDim2.new(1, -95, 0, 40)
+    wifi.BackgroundTransparency = 1
+    wifi.Text = "📶"
+    wifi.TextColor3 = Color3.fromRGB(255, 255, 255)
+    wifi.Font = Enum.Font.GothamBold
+    wifi.TextSize = 14
+    wifi.TextXAlignment = Enum.TextXAlignment.Right
+    wifi.ZIndex = 8
+    wifi.Parent = parent
+    table.insert(statusWifiLabels, wifi)
+
+    -- Bateria falsa (direita)
+    local battery = Instance.new("TextLabel")
+    battery.Name = "StatusBattery"
+    battery.Size = UDim2.new(0, 58, 0, 20)
+    battery.Position = UDim2.new(1, -62, 0, 40)
+    battery.BackgroundTransparency = 1
+    battery.Text = "🔋 " .. fakeBatteryPercent .. "%"
+    battery.TextColor3 = Color3.fromRGB(50, 205, 50)
+    battery.Font = Enum.Font.GothamBold
+    battery.TextSize = 12
+    battery.TextXAlignment = Enum.TextXAlignment.Right
+    battery.ZIndex = 8
+    battery.Parent = parent
+    table.insert(statusBatteryLabels, battery)
+
+    return clock, wifi, battery
+end
+
+local function updateAllStatusBars()
+    local timeStr = os.date("%H:%M")
+    for _, lbl in ipairs(statusClockLabels) do
+        if lbl and lbl.Parent then
+            lbl.Text = timeStr
+        end
+    end
+    local wifiIcons = {"📶", "📶", "📶", "📶", "📶"}
+    local wifiText = wifiIcons[math.clamp(fakeWifiStrength + 1, 1, 5)] or "📶"
+    for _, lbl in ipairs(statusWifiLabels) do
+        if lbl and lbl.Parent then
+            lbl.Text = wifiText
+        end
+    end
+    local batColor = fakeBatteryPercent > 20 and Color3.fromRGB(50, 205, 50) or Color3.fromRGB(255, 80, 80)
+    local batText = "🔋 " .. fakeBatteryPercent .. "%"
+    for _, lbl in ipairs(statusBatteryLabels) do
+        if lbl and lbl.Parent then
+            lbl.Text = batText
+            lbl.TextColor3 = batColor
+        end
+    end
+end
+
+-- Atualiza relógio + bateria falsa periodicamente
+task.spawn(function()
+    while true do
+        updateAllStatusBars()
+        -- Bateria falsa desce bem devagar (simulação)
+        if math.random() < 0.08 then
+            fakeBatteryPercent = math.clamp(fakeBatteryPercent - 1, 12, 100)
+        end
+        task.wait(1)
+    end
+end)
+
 local function createNavBar(parent)
     local navBar = Instance.new("Frame")
     navBar.Name = "NavBar"
@@ -1129,28 +1221,18 @@ homeCamDot.ZIndex = 6
 homeCamDot.Parent = PhoneHome
 Instance.new("UICorner", homeCamDot).CornerRadius = UDim.new(1, 0)
 
-local homeStatus = Instance.new("TextLabel")
-homeStatus.Name = "StatusClock"
-homeStatus.Size = UDim2.new(0.5, -10, 0, 22)
-homeStatus.Position = UDim2.new(0, 20, 0, 40)
-homeStatus.BackgroundTransparency = 1
-homeStatus.Text = os.date("%H:%M")
-homeStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
-homeStatus.Font = Enum.Font.GothamBold
-homeStatus.TextSize = 14
-homeStatus.TextXAlignment = Enum.TextXAlignment.Left
-homeStatus.ZIndex = 5
-homeStatus.Parent = PhoneHome
+-- Status bar no Home (relógio + wifi + bateria)
+createStatusBar(PhoneHome)
 
 fpsLabel = Instance.new("TextLabel")
 fpsLabel.Name = "FPSLabel"
-fpsLabel.Size = UDim2.new(0.5, -10, 0, 22)
-fpsLabel.Position = UDim2.new(0.5, 0, 0, 40)
+fpsLabel.Size = UDim2.new(0.5, -10, 0, 18)
+fpsLabel.Position = UDim2.new(0.5, 0, 0, 58)
 fpsLabel.BackgroundTransparency = 1
 fpsLabel.Text = "FPS: --"
 fpsLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
 fpsLabel.Font = Enum.Font.GothamBold
-fpsLabel.TextSize = 13
+fpsLabel.TextSize = 11
 fpsLabel.TextXAlignment = Enum.TextXAlignment.Right
 fpsLabel.Visible = false
 fpsLabel.ZIndex = 5
@@ -1225,15 +1307,6 @@ local frameCount = 0
 local lastFpsUpdate = os.clock()
 local currentFps = 0
 
-task.spawn(function()
-    while true do
-        if homeStatus and homeStatus.Parent then
-            homeStatus.Text = os.date("%H:%M")
-        end
-        task.wait(1)
-    end
-end)
-
 RunService.RenderStepped:Connect(function()
     frameCount = frameCount + 1
     local now = os.clock()
@@ -1250,35 +1323,35 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ========== VOLUME FIXO ==========
+-- ========== VOLUME FIXO (mais fino e um pouco mais para cima) ==========
 local VolumeFrame = Instance.new("Frame")
 VolumeFrame.Name = "VolumeFrame"
-VolumeFrame.Size = UDim2.new(0, 28, 0, 110)
-VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
+VolumeFrame.Size = UDim2.new(0, 18, 0, 96)
+VolumeFrame.Position = UDim2.new(0, -26, 0.5, -70)
 VolumeFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-VolumeFrame.BackgroundTransparency = 0.15
+VolumeFrame.BackgroundTransparency = 0.12
 VolumeFrame.BorderSizePixel = 0
 VolumeFrame.ZIndex = 30
 VolumeFrame.Visible = false
 VolumeFrame.Parent = ScreenGui
-Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", VolumeFrame).CornerRadius = UDim.new(0, 8)
 local volFrameStroke = Instance.new("UIStroke")
 volFrameStroke.Color = Color3.fromRGB(50, 205, 50)
-volFrameStroke.Thickness = 1.2
+volFrameStroke.Thickness = 1.1
 volFrameStroke.Parent = VolumeFrame
 
 local VolUpBtn = Instance.new("TextButton")
 VolUpBtn.Name = "VolUp"
-VolUpBtn.Size = UDim2.new(1, -4, 0, 48)
+VolUpBtn.Size = UDim2.new(1, -4, 0, 42)
 VolUpBtn.Position = UDim2.new(0, 2, 0, 4)
 VolUpBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolUpBtn.Text = "🔊"
 VolUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolUpBtn.Font = Enum.Font.GothamBold
-VolUpBtn.TextSize = 16
+VolUpBtn.TextSize = 13
 VolUpBtn.ZIndex = 31
 VolUpBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolUpBtn).CornerRadius = UDim.new(0, 6)
 local volUpStroke = Instance.new("UIStroke")
 volUpStroke.Color = Color3.fromRGB(50, 205, 50)
 volUpStroke.Thickness = 1
@@ -1286,16 +1359,16 @@ volUpStroke.Parent = VolUpBtn
 
 local VolDownBtn = Instance.new("TextButton")
 VolDownBtn.Name = "VolDown"
-VolDownBtn.Size = UDim2.new(1, -4, 0, 48)
-VolDownBtn.Position = UDim2.new(0, 2, 0, 58)
+VolDownBtn.Size = UDim2.new(1, -4, 0, 42)
+VolDownBtn.Position = UDim2.new(0, 2, 0, 50)
 VolDownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 VolDownBtn.Text = "🔉"
 VolDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolDownBtn.Font = Enum.Font.GothamBold
-VolDownBtn.TextSize = 16
+VolDownBtn.TextSize = 13
 VolDownBtn.ZIndex = 31
 VolDownBtn.Parent = VolumeFrame
-Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", VolDownBtn).CornerRadius = UDim.new(0, 6)
 local volDownStroke = Instance.new("UIStroke")
 volDownStroke.Color = Color3.fromRGB(50, 205, 50)
 volDownStroke.Thickness = 1
@@ -1315,11 +1388,59 @@ VolDownBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+local volumeVisible = false
+local volumeTween = nil
+
+local function showVolumeFrame()
+    if volumeVisible then return end
+    volumeVisible = true
+    VolumeFrame.Visible = true
+    VolumeFrame.BackgroundTransparency = 1
+    VolUpBtn.BackgroundTransparency = 1
+    VolDownBtn.BackgroundTransparency = 1
+    if volumeTween then pcall(function() volumeTween:Cancel() end) end
+    volumeTween = TweenService:Create(VolumeFrame, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.12
+    })
+    volumeTween:Play()
+    TweenService:Create(VolUpBtn, TweenInfo.new(0.28), {BackgroundTransparency = 0}):Play()
+    TweenService:Create(VolDownBtn, TweenInfo.new(0.28), {BackgroundTransparency = 0}):Play()
+end
+
+local function hideVolumeFrame(animated)
+    if not volumeVisible then
+        VolumeFrame.Visible = false
+        return
+    end
+    volumeVisible = false
+    if animated then
+        if volumeTween then pcall(function() volumeTween:Cancel() end) end
+        local t1 = TweenService:Create(VolumeFrame, TweenInfo.new(0.32, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            BackgroundTransparency = 1
+        })
+        local t2 = TweenService:Create(VolUpBtn, TweenInfo.new(0.32), {BackgroundTransparency = 1})
+        local t3 = TweenService:Create(VolDownBtn, TweenInfo.new(0.32), {BackgroundTransparency = 1})
+        t1:Play()
+        t2:Play()
+        t3:Play()
+        t1.Completed:Once(function()
+            if not volumeVisible then
+                VolumeFrame.Visible = false
+            end
+        end)
+    else
+        VolumeFrame.Visible = false
+        VolumeFrame.BackgroundTransparency = 0.12
+        VolUpBtn.BackgroundTransparency = 0
+        VolDownBtn.BackgroundTransparency = 0
+    end
+end
+
 local function attachVolumeTo(frame)
     if not frame then return end
     VolumeFrame.Parent = frame
-    VolumeFrame.Position = UDim2.new(0, -34, 0.5, -55)
-    VolumeFrame.Visible = true
+    VolumeFrame.Position = UDim2.new(0, -26, 0.5, -70)
+    showVolumeFrame()
 end
 
 -- ========== MUSIC PLAYER (direita) ==========
@@ -1366,9 +1487,12 @@ cameraDot.BorderSizePixel = 0
 cameraDot.Parent = MainFrame
 Instance.new("UICorner", cameraDot).CornerRadius = UDim.new(1, 0)
 
+-- Status bar no Music
+createStatusBar(MainFrame)
+
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
-TopBar.Position = UDim2.new(0, 0, 0, 38)
+TopBar.Position = UDim2.new(0, 0, 0, 58)
 TopBar.BackgroundTransparency = 1
 TopBar.Parent = MainFrame
 
@@ -1404,7 +1528,7 @@ titleStroke.Parent = MusicTitle
 
 local NowPlayingCard = Instance.new("Frame")
 NowPlayingCard.Size = UDim2.new(1, -24, 0, 118)
-NowPlayingCard.Position = UDim2.new(0, 12, 0, 88)
+NowPlayingCard.Position = UDim2.new(0, 12, 0, 108)
 NowPlayingCard.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 NowPlayingCard.BorderSizePixel = 0
 NowPlayingCard.Parent = MainFrame
@@ -1496,7 +1620,7 @@ timeLabelStroke.Parent = TimeLabel
 
 local Controls = Instance.new("Frame")
 Controls.Size = UDim2.new(1, -24, 0, 52)
-Controls.Position = UDim2.new(0, 12, 0, 218)
+Controls.Position = UDim2.new(0, 12, 0, 238)
 Controls.BackgroundTransparency = 1
 Controls.Parent = MainFrame
 
@@ -1528,7 +1652,7 @@ local RepeatBtn = createBtn("🔁", UDim2.new(1, -42, 0.5, -18), UDim2.new(0, 42
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -24, 0, 32)
-SearchBox.Position = UDim2.new(0, 12, 0, 278)
+SearchBox.Position = UDim2.new(0, 12, 0, 298)
 SearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 SearchBox.PlaceholderText = "🔍 Pesquisar música..."
 SearchBox.Text = ""
@@ -1543,8 +1667,8 @@ searchStroke.Thickness = 1.2
 searchStroke.Parent = SearchBox
 
 local ScrollList = Instance.new("ScrollingFrame")
-ScrollList.Size = UDim2.new(1, -24, 0, 90)
-ScrollList.Position = UDim2.new(0, 12, 0, 318)
+ScrollList.Size = UDim2.new(1, -24, 0, 70)
+ScrollList.Position = UDim2.new(0, 12, 0, 338)
 ScrollList.BackgroundTransparency = 1
 ScrollList.ScrollBarThickness = 3
 ScrollList.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
@@ -1555,7 +1679,7 @@ UIListLayout.Parent = ScrollList
 
 local IDInput = Instance.new("TextBox")
 IDInput.Size = UDim2.new(1, -24, 0, 34)
-IDInput.Position = UDim2.new(0, 12, 0, 318)
+IDInput.Position = UDim2.new(0, 12, 0, 338)
 IDInput.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 IDInput.PlaceholderText = "Digite o Sound ID do Roblox..."
 IDInput.Text = ""
@@ -1736,9 +1860,12 @@ swNotch.BorderSizePixel = 0
 swNotch.Parent = StopwatchFrame
 Instance.new("UICorner", swNotch).CornerRadius = UDim.new(1, 0)
 
+-- Status bar no Cronômetro
+createStatusBar(StopwatchFrame)
+
 local swTitle = Instance.new("TextLabel")
 swTitle.Size = UDim2.new(1, 0, 0, 30)
-swTitle.Position = UDim2.new(0, 0, 0, 50)
+swTitle.Position = UDim2.new(0, 0, 0, 65)
 swTitle.BackgroundTransparency = 1
 swTitle.Text = "⏱️ Cronômetro"
 swTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -1748,7 +1875,7 @@ swTitle.Parent = StopwatchFrame
 
 local swTimeLabel = Instance.new("TextLabel")
 swTimeLabel.Size = UDim2.new(1, -40, 0, 80)
-swTimeLabel.Position = UDim2.new(0, 20, 0, 120)
+swTimeLabel.Position = UDim2.new(0, 20, 0, 130)
 swTimeLabel.BackgroundTransparency = 1
 swTimeLabel.Text = "0:00:00:00.<font size=\"18\">00</font>"
 swTimeLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
@@ -1759,7 +1886,7 @@ swTimeLabel.Parent = StopwatchFrame
 
 local swStartBtn = Instance.new("TextButton")
 swStartBtn.Size = UDim2.new(0, 100, 0, 50)
-swStartBtn.Position = UDim2.new(0.5, -110, 0, 230)
+swStartBtn.Position = UDim2.new(0.5, -110, 0, 240)
 swStartBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
 swStartBtn.Text = "▶ Iniciar"
 swStartBtn.TextColor3 = Color3.new(0, 0, 0)
@@ -1770,7 +1897,7 @@ Instance.new("UICorner", swStartBtn).CornerRadius = UDim.new(0, 14)
 
 local swResetBtn = Instance.new("TextButton")
 swResetBtn.Size = UDim2.new(0, 100, 0, 50)
-swResetBtn.Position = UDim2.new(0.5, 10, 0, 230)
+swResetBtn.Position = UDim2.new(0.5, 10, 0, 240)
 swResetBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 swResetBtn.Text = "↺ Reset"
 swResetBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1859,9 +1986,12 @@ cfgEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
 cfgEars.ZIndex = 10
 cfgEars.Parent = ConfigFrame
 
+-- Status bar no Config
+createStatusBar(ConfigFrame)
+
 local cfgTitle = Instance.new("TextLabel")
 cfgTitle.Size = UDim2.new(1, 0, 0, 35)
-cfgTitle.Position = UDim2.new(0, 0, 0, 45)
+cfgTitle.Position = UDim2.new(0, 0, 0, 60)
 cfgTitle.BackgroundTransparency = 1
 cfgTitle.Text = "⚙️ Configurações"
 cfgTitle.TextColor3 = Color3.new(1,1,1)
@@ -1870,8 +2000,8 @@ cfgTitle.TextSize = 20
 cfgTitle.Parent = ConfigFrame
 
 local cfgScroll = Instance.new("ScrollingFrame")
-cfgScroll.Size = UDim2.new(1, -20, 1, -100)
-cfgScroll.Position = UDim2.new(0, 10, 0, 85)
+cfgScroll.Size = UDim2.new(1, -20, 1, -115)
+cfgScroll.Position = UDim2.new(0, 10, 0, 100)
 cfgScroll.BackgroundTransparency = 1
 cfgScroll.ScrollBarThickness = 4
 cfgScroll.Parent = ConfigFrame
@@ -2056,9 +2186,12 @@ galNotch.BorderSizePixel = 0
 galNotch.Parent = GalleryFrame
 Instance.new("UICorner", galNotch).CornerRadius = UDim.new(1, 0)
 
+-- Status bar na Galeria
+createStatusBar(GalleryFrame)
+
 local galTitle = Instance.new("TextLabel")
 galTitle.Size = UDim2.new(1, 0, 0, 30)
-galTitle.Position = UDim2.new(0, 0, 0, 42)
+galTitle.Position = UDim2.new(0, 0, 0, 60)
 galTitle.BackgroundTransparency = 1
 galTitle.Text = "🖼️ Galeria"
 galTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -2068,7 +2201,7 @@ galTitle.Parent = GalleryFrame
 
 local PhotoSearchBox = Instance.new("TextBox")
 PhotoSearchBox.Size = UDim2.new(1, -24, 0, 32)
-PhotoSearchBox.Position = UDim2.new(0, 12, 0, 80)
+PhotoSearchBox.Position = UDim2.new(0, 12, 0, 95)
 PhotoSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 PhotoSearchBox.PlaceholderText = "🔍 Pesquisar foto..."
 PhotoSearchBox.Text = ""
@@ -2083,8 +2216,8 @@ photoSearchStroke.Thickness = 1.2
 photoSearchStroke.Parent = PhotoSearchBox
 
 local PhotoScrollList = Instance.new("ScrollingFrame")
-PhotoScrollList.Size = UDim2.new(1, -24, 0, 280)
-PhotoScrollList.Position = UDim2.new(0, 12, 0, 120)
+PhotoScrollList.Size = UDim2.new(1, -24, 0, 265)
+PhotoScrollList.Position = UDim2.new(0, 12, 0, 135)
 PhotoScrollList.BackgroundTransparency = 1
 PhotoScrollList.ScrollBarThickness = 3
 PhotoScrollList.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
@@ -2509,7 +2642,8 @@ closePhone = function()
             end)
         end
     end
-    VolumeFrame.Visible = false
+    -- Animação de saída dos botões de volume (não some seco)
+    hideVolumeFrame(true)
     isPhoneOpen = false
     isMusicOpen = false
     currentApp = "home"
