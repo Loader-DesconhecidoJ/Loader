@@ -1063,169 +1063,6 @@ local function createNavBar(parent)
     return homeBtn, backBtn
 end
 
--- ========== STATUS BAR (Relógio + WiFi + Bateria) ==========
-local statusBarRefs = {} -- { {clock=, wifiBars=, batteryFill=, batteryPct=, wifiIcon=} , ... }
-local fakeBattery = 87
-local fakeWifiStrength = 4 -- 1 a 4
-local batteryDrainTimer = 0
-
-local function createStatusBar(parent)
-    local bar = Instance.new("Frame")
-    bar.Name = "StatusBar"
-    bar.Size = UDim2.new(1, -24, 0, 20)
-    bar.Position = UDim2.new(0, 12, 0, 36)
-    bar.BackgroundTransparency = 1
-    bar.ZIndex = 15
-    bar.Parent = parent
-
-    -- Relógio (esquerda)
-    local clock = Instance.new("TextLabel")
-    clock.Name = "StatusClock"
-    clock.Size = UDim2.new(0, 70, 1, 0)
-    clock.Position = UDim2.new(0, 0, 0, 0)
-    clock.BackgroundTransparency = 1
-    clock.Text = os.date("%H:%M")
-    clock.TextColor3 = Color3.fromRGB(255, 255, 255)
-    clock.Font = Enum.Font.GothamBold
-    clock.TextSize = 13
-    clock.TextXAlignment = Enum.TextXAlignment.Left
-    clock.ZIndex = 16
-    clock.Parent = bar
-
-    -- Container direita (WiFi + Bateria)
-    local right = Instance.new("Frame")
-    right.Name = "RightStatus"
-    right.Size = UDim2.new(0, 90, 1, 0)
-    right.Position = UDim2.new(1, -90, 0, 0)
-    right.BackgroundTransparency = 1
-    right.ZIndex = 16
-    right.Parent = bar
-
-    -- WiFi (barras)
-    local wifiContainer = Instance.new("Frame")
-    wifiContainer.Name = "WifiBars"
-    wifiContainer.Size = UDim2.new(0, 22, 0, 14)
-    wifiContainer.Position = UDim2.new(0, 0, 0.5, -7)
-    wifiContainer.BackgroundTransparency = 1
-    wifiContainer.ZIndex = 17
-    wifiContainer.Parent = right
-
-    local wifiBars = {}
-    local barHeights = {4, 7, 10, 13}
-    for i = 1, 4 do
-        local wBar = Instance.new("Frame")
-        wBar.Name = "Bar" .. i
-        wBar.Size = UDim2.new(0, 3, 0, barHeights[i])
-        wBar.Position = UDim2.new(0, (i - 1) * 5, 1, -barHeights[i])
-        wBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        wBar.BorderSizePixel = 0
-        wBar.ZIndex = 18
-        wBar.Parent = wifiContainer
-        Instance.new("UICorner", wBar).CornerRadius = UDim.new(0, 1)
-        wifiBars[i] = wBar
-    end
-
-    -- Bateria
-    local battOuter = Instance.new("Frame")
-    battOuter.Name = "BatteryOuter"
-    battOuter.Size = UDim2.new(0, 28, 0, 12)
-    battOuter.Position = UDim2.new(0, 28, 0.5, -6)
-    battOuter.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    battOuter.BackgroundTransparency = 0.7
-    battOuter.BorderSizePixel = 0
-    battOuter.ZIndex = 17
-    battOuter.Parent = right
-    Instance.new("UICorner", battOuter).CornerRadius = UDim.new(0, 3)
-
-    local battStroke = Instance.new("UIStroke")
-    battStroke.Color = Color3.fromRGB(255, 255, 255)
-    battStroke.Thickness = 1.2
-    battStroke.Parent = battOuter
-
-    local battTip = Instance.new("Frame")
-    battTip.Name = "BatteryTip"
-    battTip.Size = UDim2.new(0, 3, 0, 6)
-    battTip.Position = UDim2.new(1, 1, 0.5, -3)
-    battTip.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    battTip.BorderSizePixel = 0
-    battTip.ZIndex = 17
-    battTip.Parent = battOuter
-    Instance.new("UICorner", battTip).CornerRadius = UDim.new(0, 1)
-
-    local battFill = Instance.new("Frame")
-    battFill.Name = "BatteryFill"
-    battFill.Size = UDim2.new(fakeBattery / 100, -2, 1, -2)
-    battFill.Position = UDim2.new(0, 1, 0, 1)
-    battFill.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-    battFill.BorderSizePixel = 0
-    battFill.ZIndex = 18
-    battFill.Parent = battOuter
-    Instance.new("UICorner", battFill).CornerRadius = UDim.new(0, 2)
-
-    local battPct = Instance.new("TextLabel")
-    battPct.Name = "BatteryPct"
-    battPct.Size = UDim2.new(0, 28, 1, 0)
-    battPct.Position = UDim2.new(0, 60, 0, 0)
-    battPct.BackgroundTransparency = 1
-    battPct.Text = tostring(fakeBattery) .. "%"
-    battPct.TextColor3 = Color3.fromRGB(255, 255, 255)
-    battPct.Font = Enum.Font.GothamBold
-    battPct.TextSize = 11
-    battPct.TextXAlignment = Enum.TextXAlignment.Left
-    battPct.ZIndex = 17
-    battPct.Parent = right
-
-    local ref = {
-        clock = clock,
-        wifiBars = wifiBars,
-        batteryFill = battFill,
-        batteryPct = battPct,
-        bar = bar
-    }
-    table.insert(statusBarRefs, ref)
-    return ref
-end
-
-local function updateAllStatusBars()
-    local timeStr = os.date("%H:%M")
-    local fillScale = math.clamp(fakeBattery / 100, 0.05, 1)
-
-    local battColor
-    if fakeBattery > 50 then
-        battColor = Color3.fromRGB(50, 205, 50)
-    elseif fakeBattery > 20 then
-        battColor = Color3.fromRGB(255, 200, 50)
-    else
-        battColor = Color3.fromRGB(255, 60, 60)
-    end
-
-    for _, ref in ipairs(statusBarRefs) do
-        if ref.clock and ref.clock.Parent then
-            ref.clock.Text = timeStr
-        end
-        if ref.batteryFill and ref.batteryFill.Parent then
-            ref.batteryFill.Size = UDim2.new(fillScale, -2, 1, -2)
-            ref.batteryFill.BackgroundColor3 = battColor
-        end
-        if ref.batteryPct and ref.batteryPct.Parent then
-            ref.batteryPct.Text = tostring(math.floor(fakeBattery)) .. "%"
-        end
-        if ref.wifiBars then
-            for i, wBar in ipairs(ref.wifiBars) do
-                if wBar and wBar.Parent then
-                    if i <= fakeWifiStrength then
-                        wBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                        wBar.BackgroundTransparency = 0
-                    else
-                        wBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                        wBar.BackgroundTransparency = 0.65
-                    end
-                end
-            end
-        end
-    end
-end
-
 -- ========== PHONE HOME SCREEN (posicionado à DIREITA) ==========
 local PhoneHome = Instance.new("Frame")
 PhoneHome.Name = "PhoneHome"
@@ -1292,20 +1129,31 @@ homeCamDot.ZIndex = 6
 homeCamDot.Parent = PhoneHome
 Instance.new("UICorner", homeCamDot).CornerRadius = UDim.new(1, 0)
 
-local homeStatusRef = createStatusBar(PhoneHome)
+local homeStatus = Instance.new("TextLabel")
+homeStatus.Name = "StatusClock"
+homeStatus.Size = UDim2.new(0.5, -10, 0, 22)
+homeStatus.Position = UDim2.new(0, 20, 0, 40)
+homeStatus.BackgroundTransparency = 1
+homeStatus.Text = os.date("%H:%M")
+homeStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+homeStatus.Font = Enum.Font.GothamBold
+homeStatus.TextSize = 14
+homeStatus.TextXAlignment = Enum.TextXAlignment.Left
+homeStatus.ZIndex = 5
+homeStatus.Parent = PhoneHome
 
 fpsLabel = Instance.new("TextLabel")
 fpsLabel.Name = "FPSLabel"
-fpsLabel.Size = UDim2.new(0, 60, 0, 16)
-fpsLabel.Position = UDim2.new(0.5, -30, 0, 56)
+fpsLabel.Size = UDim2.new(0.5, -10, 0, 22)
+fpsLabel.Position = UDim2.new(0.5, 0, 0, 40)
 fpsLabel.BackgroundTransparency = 1
 fpsLabel.Text = "FPS: --"
 fpsLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
 fpsLabel.Font = Enum.Font.GothamBold
-fpsLabel.TextSize = 11
-fpsLabel.TextXAlignment = Enum.TextXAlignment.Center
+fpsLabel.TextSize = 13
+fpsLabel.TextXAlignment = Enum.TextXAlignment.Right
 fpsLabel.Visible = false
-fpsLabel.ZIndex = 15
+fpsLabel.ZIndex = 5
 fpsLabel.Parent = PhoneHome
 
 local homeTitle = Instance.new("TextLabel")
@@ -1379,22 +1227,9 @@ local currentFps = 0
 
 task.spawn(function()
     while true do
-        -- Relógio atualiza todo segundo
-        updateAllStatusBars()
-
-        -- Bateria falsa: drena bem devagar + micro variação
-        batteryDrainTimer = batteryDrainTimer + 1
-        if batteryDrainTimer >= 45 then
-            batteryDrainTimer = 0
-            fakeBattery = math.clamp(fakeBattery - 0.3 + (math.random() * 0.2 - 0.05), 8, 100)
+        if homeStatus and homeStatus.Parent then
+            homeStatus.Text = os.date("%H:%M")
         end
-
-        -- WiFi falso: ocasionalmente muda força (1-4)
-        if math.random() < 0.08 then
-            local delta = (math.random() < 0.5) and -1 or 1
-            fakeWifiStrength = math.clamp(fakeWifiStrength + delta, 2, 4)
-        end
-
         task.wait(1)
     end
 end)
@@ -1532,11 +1367,9 @@ cameraDot.BorderSizePixel = 0
 cameraDot.Parent = MainFrame
 Instance.new("UICorner", cameraDot).CornerRadius = UDim.new(1, 0)
 
-createStatusBar(MainFrame)
-
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
-TopBar.Position = UDim2.new(0, 0, 0, 56)
+TopBar.Position = UDim2.new(0, 0, 0, 38)
 TopBar.BackgroundTransparency = 1
 TopBar.Parent = MainFrame
 
@@ -1904,11 +1737,9 @@ swNotch.BorderSizePixel = 0
 swNotch.Parent = StopwatchFrame
 Instance.new("UICorner", swNotch).CornerRadius = UDim.new(1, 0)
 
-createStatusBar(StopwatchFrame)
-
 local swTitle = Instance.new("TextLabel")
 swTitle.Size = UDim2.new(1, 0, 0, 30)
-swTitle.Position = UDim2.new(0, 0, 0, 58)
+swTitle.Position = UDim2.new(0, 0, 0, 50)
 swTitle.BackgroundTransparency = 1
 swTitle.Text = "⏱️ Cronômetro"
 swTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -2029,11 +1860,9 @@ cfgEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
 cfgEars.ZIndex = 10
 cfgEars.Parent = ConfigFrame
 
-createStatusBar(ConfigFrame)
-
 local cfgTitle = Instance.new("TextLabel")
 cfgTitle.Size = UDim2.new(1, 0, 0, 35)
-cfgTitle.Position = UDim2.new(0, 0, 0, 58)
+cfgTitle.Position = UDim2.new(0, 0, 0, 45)
 cfgTitle.BackgroundTransparency = 1
 cfgTitle.Text = "⚙️ Configurações"
 cfgTitle.TextColor3 = Color3.new(1,1,1)
@@ -2228,11 +2057,9 @@ galNotch.BorderSizePixel = 0
 galNotch.Parent = GalleryFrame
 Instance.new("UICorner", galNotch).CornerRadius = UDim.new(1, 0)
 
-createStatusBar(GalleryFrame)
-
 local galTitle = Instance.new("TextLabel")
 galTitle.Size = UDim2.new(1, 0, 0, 30)
-galTitle.Position = UDim2.new(0, 0, 0, 58)
+galTitle.Position = UDim2.new(0, 0, 0, 42)
 galTitle.BackgroundTransparency = 1
 galTitle.Text = "🖼️ Galeria"
 galTitle.TextColor3 = Color3.new(1, 1, 1)
@@ -2685,6 +2512,7 @@ closePhone = function()
     end
 
     -- Volume fica parentado no phone e some JUNTO com ele (sem animação própria)
+    -- quando o frame do phone ficar Visible = false no Completed do tween
 
     isPhoneOpen = false
     isMusicOpen = false
