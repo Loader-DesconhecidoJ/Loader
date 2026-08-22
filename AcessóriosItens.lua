@@ -1254,7 +1254,7 @@ end)
 local VolumeFrame = Instance.new("Frame")
 VolumeFrame.Name = "VolumeFrame"
 VolumeFrame.Size = UDim2.new(0, 16, 0, 96)
-VolumeFrame.Position = UDim2.new(0, -22, 0.5, -72)
+VolumeFrame.Position = UDim2.new(0, -22, 0.5, -130)
 VolumeFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 VolumeFrame.BackgroundTransparency = 0.15
 VolumeFrame.BorderSizePixel = 0
@@ -1318,13 +1318,9 @@ end)
 local function attachVolumeTo(frame)
     if not frame then return end
     VolumeFrame.Parent = frame
-    VolumeFrame.Position = UDim2.new(0, -40, 0.5, -72)
-    VolumeFrame.BackgroundTransparency = 1
+    VolumeFrame.Position = UDim2.new(0, -22, 0.5, -130)
+    VolumeFrame.BackgroundTransparency = 0.15
     VolumeFrame.Visible = true
-    TweenService:Create(VolumeFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0, -22, 0.5, -72),
-        BackgroundTransparency = 0.15
-    }):Play()
 end
 
 -- ========== MUSIC PLAYER (direita) ==========
@@ -2515,18 +2511,8 @@ closePhone = function()
         end
     end
 
-    -- Animação suave de saída dos botões de volume
-    if VolumeFrame and VolumeFrame.Visible then
-        local volTween = TweenService:Create(VolumeFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-            Position = UDim2.new(0, -40, 0.5, -72),
-            BackgroundTransparency = 1
-        })
-        volTween:Play()
-        volTween.Completed:Once(function()
-            VolumeFrame.Visible = false
-            VolumeFrame.BackgroundTransparency = 0.15
-        end)
-    end
+    -- Volume fica parentado no phone e some JUNTO com ele (sem animação própria)
+    -- quando o frame do phone ficar Visible = false no Completed do tween
 
     isPhoneOpen = false
     isMusicOpen = false
