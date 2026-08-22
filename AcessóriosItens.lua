@@ -1,4 +1,16 @@
 -- =========================================================
+-- FALLBACK TASK (executors antigos)
+-- =========================================================
+if not task then
+    task = {
+        wait = function(t) return wait(t) end,
+        spawn = function(fn) return spawn(fn) end,
+        delay = function(t, fn) return delay(t, fn) end,
+        defer = function(fn) return spawn(fn) end,
+    }
+end
+
+-- =========================================================
 -- MENU DE SELEÇÃO INICIAL
 -- =========================================================
 local selectedItems = {
@@ -2236,7 +2248,7 @@ ZoomOutBtn.Name = "ZoomOut"
 ZoomOutBtn.Size = UDim2.new(0, 36, 0, 36)
 ZoomOutBtn.Position = UDim2.new(0.5, -44, 1, -72)
 ZoomOutBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-ZoomOutBtn.Text = "−"
+ZoomOutBtn.Text = "-"
 ZoomOutBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ZoomOutBtn.TextSize = 22
 ZoomOutBtn.Font = Enum.Font.GothamBold
