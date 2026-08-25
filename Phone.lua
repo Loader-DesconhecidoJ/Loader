@@ -1304,7 +1304,7 @@ Instance.new("UICorner", PhotoViewerView).CornerRadius = UDim.new(0, 28)
 
 local PhotoDisplay = Instance.new("ImageLabel")
 PhotoDisplay.Name = "PhotoDisplay"
-PhotoDisplay.Size = UDim2.new(1, -16, 1, -120)
+PhotoDisplay.Size = UDim2.new(1, -16, 1, -100)
 PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 PhotoDisplay.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
 PhotoDisplay.BackgroundTransparency = 0.3
@@ -1331,7 +1331,7 @@ UserInputService.TouchMoved:Connect(function(input, processed)
         else
             local scale = dist / pinchStartDist
             currentZoom = math.clamp(currentZoom * (scale > 1 and 1.02 or 0.98), 0.5, 3)
-            PhotoDisplay.Size = UDim2.new(currentZoom, -16, currentZoom, -120)
+            PhotoDisplay.Size = UDim2.new(currentZoom, -16, currentZoom, -100)
             PhotoDisplay.Position = UDim2.new(0.5 - currentZoom/2, 8, 0.5 - currentZoom/2, 40)
         end
     end
@@ -1341,17 +1341,111 @@ UserInputService.TouchEnded:Connect(function()
     pinchStartDist = nil
 end)
 
-local PhotoNameLabel = Instance.new("TextLabel")
-PhotoNameLabel.Size = UDim2.new(1, -20, 0, 24)
-PhotoNameLabel.Position = UDim2.new(0, 10, 1, -95)
-PhotoNameLabel.BackgroundTransparency = 1
-PhotoNameLabel.Text = ""
-PhotoNameLabel.TextColor3 = Color3.new(1, 1, 1)
-PhotoNameLabel.Font = Enum.Font.GothamBold
-PhotoNameLabel.TextSize = 14
-PhotoNameLabel.TextXAlignment = Enum.TextXAlignment.Center
-PhotoNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-PhotoNameLabel.Parent = PhotoViewerView
+-- Botão clássico 3 pontinhos (menu)
+local isPhotoMenuOpen = false
+
+local PhotoMenuBtn = Instance.new("TextButton")
+PhotoMenuBtn.Name = "PhotoMenuBtn"
+PhotoMenuBtn.Size = UDim2.new(0, 36, 0, 36)
+PhotoMenuBtn.Position = UDim2.new(1, -48, 0, 42)
+PhotoMenuBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+PhotoMenuBtn.BackgroundTransparency = 0.35
+PhotoMenuBtn.Text = "⋮"
+PhotoMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PhotoMenuBtn.Font = Enum.Font.GothamBold
+PhotoMenuBtn.TextSize = 22
+PhotoMenuBtn.ZIndex = 25
+PhotoMenuBtn.Parent = PhotoViewerView
+Instance.new("UICorner", PhotoMenuBtn).CornerRadius = UDim.new(0, 10)
+
+-- Menu (branco sujo + detalhes pretos) com scroll
+local PhotoMenuFrame = Instance.new("Frame")
+PhotoMenuFrame.Name = "PhotoMenuFrame"
+PhotoMenuFrame.Size = UDim2.new(0, 200, 0, 170)
+PhotoMenuFrame.Position = UDim2.new(1, -215, 0, 82)
+PhotoMenuFrame.BackgroundColor3 = Color3.fromRGB(245, 243, 236) -- branco sujo
+PhotoMenuFrame.BorderSizePixel = 0
+PhotoMenuFrame.Visible = false
+PhotoMenuFrame.ZIndex = 30
+PhotoMenuFrame.Parent = PhotoViewerView
+Instance.new("UICorner", PhotoMenuFrame).CornerRadius = UDim.new(0, 12)
+
+local photoMenuStroke = Instance.new("UIStroke")
+photoMenuStroke.Color = Color3.fromRGB(20, 20, 20)
+photoMenuStroke.Thickness = 1.5
+photoMenuStroke.Parent = PhotoMenuFrame
+
+local PhotoMenuScroll = Instance.new("ScrollingFrame")
+PhotoMenuScroll.Name = "PhotoMenuScroll"
+PhotoMenuScroll.Size = UDim2.new(1, -10, 1, -10)
+PhotoMenuScroll.Position = UDim2.new(0, 5, 0, 5)
+PhotoMenuScroll.BackgroundTransparency = 1
+PhotoMenuScroll.BorderSizePixel = 0
+PhotoMenuScroll.ScrollBarThickness = 4
+PhotoMenuScroll.ScrollBarImageColor3 = Color3.fromRGB(20, 20, 20)
+PhotoMenuScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PhotoMenuScroll.ZIndex = 31
+PhotoMenuScroll.Parent = PhotoMenuFrame
+
+local PhotoMenuLayout = Instance.new("UIListLayout")
+PhotoMenuLayout.Padding = UDim.new(0, 6)
+PhotoMenuLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PhotoMenuLayout.Parent = PhotoMenuScroll
+
+-- Nome da foto (dentro do menu)
+local PhotoMenuNameLabel = Instance.new("TextLabel")
+PhotoMenuNameLabel.Name = "PhotoMenuName"
+PhotoMenuNameLabel.Size = UDim2.new(1, 0, 0, 40)
+PhotoMenuNameLabel.BackgroundColor3 = Color3.fromRGB(235, 232, 224)
+PhotoMenuNameLabel.BorderSizePixel = 0
+PhotoMenuNameLabel.Text = ""
+PhotoMenuNameLabel.TextColor3 = Color3.fromRGB(15, 15, 15)
+PhotoMenuNameLabel.Font = Enum.Font.GothamBold
+PhotoMenuNameLabel.TextSize = 13
+PhotoMenuNameLabel.TextWrapped = true
+PhotoMenuNameLabel.TextXAlignment = Enum.TextXAlignment.Center
+PhotoMenuNameLabel.TextYAlignment = Enum.TextYAlignment.Center
+PhotoMenuNameLabel.ZIndex = 32
+PhotoMenuNameLabel.LayoutOrder = 1
+PhotoMenuNameLabel.Parent = PhotoMenuScroll
+Instance.new("UICorner", PhotoMenuNameLabel).CornerRadius = UDim.new(0, 8)
+
+local function createMenuOption(text, order, bgColor, textColor)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = bgColor
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = textColor
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.ZIndex = 32
+    btn.LayoutOrder = order
+    btn.Parent = PhotoMenuScroll
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    return btn
+end
+
+local setWallpaperMenuBtn = createMenuOption("🖼️ Definir como Wallpaper", 2, Color3.fromRGB(30, 30, 30), Color3.fromRGB(245, 243, 236))
+local deletePhotoMenuBtn = createMenuOption("🗑️ Excluir foto", 3, Color3.fromRGB(160, 30, 30), Color3.fromRGB(255, 255, 255))
+
+PhotoMenuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PhotoMenuScroll.CanvasSize = UDim2.new(0, 0, 0, PhotoMenuLayout.AbsoluteContentSize.Y + 8)
+end)
+
+local function closePhotoMenu()
+    isPhotoMenuOpen = false
+    PhotoMenuFrame.Visible = false
+end
+
+local function togglePhotoMenu()
+    isPhotoMenuOpen = not isPhotoMenuOpen
+    PhotoMenuFrame.Visible = isPhotoMenuOpen
+end
+
+PhotoMenuBtn.MouseButton1Click:Connect(function()
+    togglePhotoMenu()
+end)
 
 local prevPhotoBtn = Instance.new("TextButton")
 prevPhotoBtn.Size = UDim2.new(0, 70, 0, 36)
@@ -1375,30 +1469,20 @@ nextPhotoBtn.TextSize = 13
 nextPhotoBtn.Parent = PhotoViewerView
 Instance.new("UICorner", nextPhotoBtn).CornerRadius = UDim.new(0, 10)
 
-local deletePhotoBtn = Instance.new("TextButton")
-deletePhotoBtn.Size = UDim2.new(0, 70, 0, 36)
-deletePhotoBtn.Position = UDim2.new(0.5, -35, 1, -55)
-deletePhotoBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-deletePhotoBtn.Text = "🗑️ Excluir"
-deletePhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-deletePhotoBtn.Font = Enum.Font.GothamBold
-deletePhotoBtn.TextSize = 13
-deletePhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", deletePhotoBtn).CornerRadius = UDim.new(0, 10)
-
 local galNavBtn, galBackBtn = createNavBar(GalleryFrame)
 
 local function exitPhotoViewer()
     isInPhotoViewer = false
+    closePhotoMenu()
     PhotoViewerView.Visible = false
     PhotoScrollList.Visible = true
     PhotoSearchBox.Visible = true
     galTitle.Visible = true
     PhotoDisplay.Image = ""
-    PhotoNameLabel.Text = ""
+    PhotoMenuNameLabel.Text = ""
     currentPhotoIndex = 0
     currentZoom = 1
-    PhotoDisplay.Size = UDim2.new(1, -16, 1, -120)
+    PhotoDisplay.Size = UDim2.new(1, -16, 1, -100)
     PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 end
 
@@ -1409,13 +1493,14 @@ local function openPhotoByIndex(idx)
     currentPhotoIndex = idx
     local photo = filteredPhotoList[idx]
     isInPhotoViewer = true
+    closePhotoMenu()
     PhotoViewerView.Visible = true
     PhotoScrollList.Visible = false
     PhotoSearchBox.Visible = false
     galTitle.Visible = false
-    PhotoNameLabel.Text = (photo.name or "Foto") .. "  (" .. idx .. "/" .. #filteredPhotoList .. ")"
+    PhotoMenuNameLabel.Text = (photo.name or "Foto") .. "\n(" .. idx .. "/" .. #filteredPhotoList .. ")"
     currentZoom = 1
-    PhotoDisplay.Size = UDim2.new(1, -16, 1, -120)
+    PhotoDisplay.Size = UDim2.new(1, -16, 1, -100)
     PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 
     local success, asset = pcall(function()
@@ -1424,7 +1509,7 @@ local function openPhotoByIndex(idx)
     if success and asset and asset ~= "" then
         PhotoDisplay.Image = asset
     else
-        PhotoNameLabel.Text = "Erro ao carregar foto"
+        PhotoMenuNameLabel.Text = "Erro ao carregar foto"
         PhotoDisplay.Image = ""
     end
 end
@@ -1436,22 +1521,39 @@ nextPhotoBtn.MouseButton1Click:Connect(function()
     if #filteredPhotoList > 0 then openPhotoByIndex(currentPhotoIndex + 1) end
 end)
 
-deletePhotoBtn.MouseButton1Click:Connect(function()
+-- Excluir foto (do menu)
+deletePhotoMenuBtn.MouseButton1Click:Connect(function()
     if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
     local photo = filteredPhotoList[currentPhotoIndex]
     pcall(function()
         delfile(photo.path)
     end)
-    -- remove da lista
     for i, p in ipairs(photoList) do
         if p.path == photo.path then
             table.remove(photoList, i)
             break
         end
     end
+    closePhotoMenu()
     exitPhotoViewer()
     task.wait(0.1)
     updatePhotoList()
+end)
+
+-- Definir foto atual como wallpaper
+setWallpaperMenuBtn.MouseButton1Click:Connect(function()
+    if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
+    local photo = filteredPhotoList[currentPhotoIndex]
+    local success, asset = pcall(function()
+        return getcustomasset(photo.path)
+    end)
+    if success and asset and asset ~= "" then
+        currentWallpaper = asset
+        phoneSettings.wallpaper = asset
+        homeBg.Image = asset
+        saveSettings()
+        closePhotoMenu()
+    end
 end)
 
 local function updatePhotoList()
@@ -1619,7 +1721,11 @@ end
 
 local function handleBack()
     if currentApp == "gallery" and isInPhotoViewer then
-        exitPhotoViewer()
+        if isPhotoMenuOpen then
+            closePhotoMenu()
+        else
+            exitPhotoViewer()
+        end
     end
 end
 
