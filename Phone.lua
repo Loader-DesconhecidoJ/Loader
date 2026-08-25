@@ -1681,102 +1681,76 @@ local function togglePhone()
     end
 end
 
--- ========== HOLD 0.45s PARA ARRASTAR O BOTÃO DO PHONE OU O PHONE ==========
-local holdStart = 0
-local isDraggingPhone = false
-local isDraggingHotbar = false
-local dragConnection = nil
-local dragOffset = Vector2.new(0, 0)
+-- ========== HOLD 0.45s PARA ARRASTAR SÓ O BOTÃO (sistema do LOCK) ==========
+local hold = false
+local canDrag = false
+local isDragging = false
+local startPos = nil
+local dragStart = nil
 
-phoneSlot.MouseButton1Down:Connect(function()
-    holdStart = os.clock()
-    local mousePos = UserInputService:GetMouseLocation()
-    if isPhoneOpen then
-        local absPos = PhoneHome.AbsolutePosition
-        dragOffset = Vector2.new(mousePos.X - absPos.X, mousePos.Y - absPos.Y)
-    else
-        local absPos = HotbarFrame.AbsolutePosition
-        dragOffset = Vector2.new(mousePos.X - absPos.X, mousePos.Y - absPos.Y)
-    end
+local function playHoldAnim(state)
+    if not phoneSlot then return end
+    local targetSize = state and UDim2.new(0, 42, 0, 42) or UDim2.new(0, 36, 0, 36)
+    local targetColor = state and Color3.fromRGB(50, 205, 50) or Color3.fromRGB(28, 28, 36)
+    TweenService:Create(phoneSlot, TweenInfo.new(state and 0.15 or 0.2, Enum.EasingStyle.Quad), {
+        Size = targetSize,
+        BackgroundColor3 = targetColor
+    }):Play()
+end
 
-    task.delay(0.45, function()
-        if holdStart > 0 and (os.clock() - holdStart) >= 0.45 then
-            if isPhoneOpen then
-                isDraggingPhone = true
-                TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
-                if dragConnection then dragConnection:Disconnect() end
-                dragConnection = RunService.RenderStepped:Connect(function()
-                    if isDraggingPhone then
-                        local mouse = UserInputService:GetMouseLocation()
-                        local newPos = UDim2.new(0, mouse.X - dragOffset.X, 0, mouse.Y - dragOffset.Y)
-                        PhoneHome.Position = newPos
-                        MainFrame.Position = newPos
-                        StopwatchFrame.Position = newPos
-                        ConfigFrame.Position = newPos
-                        GalleryFrame.Position = newPos
-                    end
-                end)
-            else
-                isDraggingHotbar = true
-                TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
-                if dragConnection then dragConnection:Disconnect() end
-                dragConnection = RunService.RenderStepped:Connect(function()
-                    if isDraggingHotbar then
-                        local mouse = UserInputService:GetMouseLocation()
-                        local newPos = UDim2.new(0, mouse.X - dragOffset.X, 0, mouse.Y - dragOffset.Y)
-                        HotbarFrame.Position = newPos
-                    end
-                end)
+phoneSlot.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hold = true
+        canDrag = false
+        isDragging = false
+        startPos = HotbarFrame.Position
+        dragStart = input.Position
+        playHoldAnim(true)
+        task.delay(0.45, function()
+            if hold then
+                canDrag = true
+                isDragging = true
             end
-        end
-    end)
+        end)
+    end
 end)
 
-phoneSlot.MouseButton1Up:Connect(function()
-    local held = os.clock() - holdStart
-    holdStart = 0
-    if isDraggingPhone then
-        isDraggingPhone = false
-        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-        -- salva a nova posição do phone
-        local pos = PhoneHome.Position
-        phoneSettings.phonePosition = {
-            X = pos.X.Scale,
-            Y = pos.Y.Scale,
-            XOffset = pos.X.Offset,
-            YOffset = pos.Y.Offset
-        }
-        saveSettings()
-    elseif isDraggingHotbar then
-        isDraggingHotbar = false
-        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-        -- salva a nova posição do botão
-        local pos = HotbarFrame.Position
-        phoneSettings.hotbarPosition = {
-            X = pos.X.Scale,
-            Y = pos.Y.Scale,
-            XOffset = pos.X.Offset,
-            YOffset = pos.Y.Offset
-        }
-        saveSettings()
-    else
-        -- clique normal
-        if held < 0.45 then
-            togglePhone()
+phoneSlot.InputChanged:Connect(function(input)
+    if canDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        HotbarFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+phoneSlot.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local wasDragging = canDrag or isDragging
+        hold = false
+        canDrag = false
+        isDragging = false
+        playHoldAnim(false)
+
+        if wasDragging then
+            local pos = HotbarFrame.Position
+            phoneSettings.hotbarPosition = {
+                X = pos.X.Scale,
+                Y = pos.Y.Scale,
+                XOffset = pos.X.Offset,
+                YOffset = pos.Y.Offset
+            }
+            saveSettings()
         end
     end
 end)
 
-phoneSlot.MouseLeave:Connect(function()
-    if isDraggingPhone or isDraggingHotbar then
-        isDraggingPhone = false
-        isDraggingHotbar = false
-        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-    end
-    holdStart = 0
+phoneSlot.MouseButton1Click:Connect(function()
+    if canDrag or isDragging then return end
+    togglePhone()
 end)
 
 -- Tecla 0 (PC)
