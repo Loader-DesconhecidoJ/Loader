@@ -1,32 +1,72 @@
--- =========================================================
--- TZE PHONE ATUALIZADO (só Phone + Câmera + persistência)
--- Removido: BloxyCola, Lanterna, Spray
--- Novo: Câmera, Wallpaper persistente, Galeria com zoom/pinça + exclusão
--- Phone fixo (não arrasta), hold 0.45s no botão para arrastar, tecla 0
--- Configurações salvas em PHONE/settings.json
--- =========================================================
+--[[
+    TZE PHONE - Versao limpa e estavel
+    Apenas Phone + Camera + persistencia
+]]
 
--- =========================================================
--- PROTEÇÃO CONTRA NIL
--- =========================================================
-if not game:IsLoaded() then
-    game.Loaded:Wait()
-end
+-- Protecao maxima contra nil
+local success, err = pcall(function()
+    if game and game.GetService then
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+    end
+end)
 
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
-if not Player then
-    Player = Players.PlayerAdded:Wait()
+while not Player do
+    task.wait(0.1)
+    Player = Players.LocalPlayer
 end
 
-local isfolder = isfolder or function() return false end
-local makefolder = makefolder or function() end
-local listfiles = listfiles or function() return {} end
-local getcustomasset = getcustomasset or function() return "" end
-local isfile = isfile or function() return false end
-local writefile = writefile or function() end
-local readfile = readfile or function() return "" end
-local delfile = delfile or function() end
+-- Guarda as funcoes originais do executor (se existirem)
+local _isfolder = (type(isfolder) == "function") and isfolder or nil
+local _makefolder = (type(makefolder) == "function") and makefolder or nil
+local _listfiles = (type(listfiles) == "function") and listfiles or nil
+local _getcustomasset = (type(getcustomasset) == "function") and getcustomasset or nil
+local _isfile = (type(isfile) == "function") and isfile or nil
+local _writefile = (type(writefile) == "function") and writefile or nil
+local _readfile = (type(readfile) == "function") and readfile or nil
+local _delfile = (type(delfile) == "function") and delfile or nil
+
+-- Fallbacks seguros (nunca nil, sem recursao)
+local isfolder = function(p)
+    if not _isfolder then return false end
+    local ok, r = pcall(_isfolder, p)
+    return ok and r
+end
+local makefolder = function(p)
+    if not _makefolder then return end
+    pcall(_makefolder, p)
+end
+local listfiles = function(p)
+    if not _listfiles then return {} end
+    local ok, r = pcall(_listfiles, p)
+    return (ok and type(r) == "table") and r or {}
+end
+local getcustomasset = function(p)
+    if not _getcustomasset then return "" end
+    local ok, r = pcall(_getcustomasset, p)
+    return (ok and r) or ""
+end
+local isfile = function(p)
+    if not _isfile then return false end
+    local ok, r = pcall(_isfile, p)
+    return ok and r
+end
+local writefile = function(p, c)
+    if not _writefile then return end
+    pcall(_writefile, p, c)
+end
+local readfile = function(p)
+    if not _readfile then return "" end
+    local ok, r = pcall(_readfile, p)
+    return (ok and r) or ""
+end
+local delfile = function(p)
+    if not _delfile then return end
+    pcall(_delfile, p)
+end
 
 -- =========================================================
 -- CRIA PASTAS
