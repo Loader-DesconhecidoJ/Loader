@@ -1,12 +1,4 @@
 -- =========================================================
--- TZE PHONE ATUALIZADO (só Phone + persistência)
--- Removido: BloxyCola, Lanterna, Spray, Câmera
--- Novo: Wallpaper persistente, Galeria com zoom/pinça + exclusão
--- Phone fixo (não arrasta), hold 0.45s no botão para arrastar botão ou phone, tecla 0
--- Configurações salvas em PHONE/settings.json
--- =========================================================
-
--- =========================================================
 -- PROTEÇÃO CONTRA NIL
 -- =========================================================
 if not game:IsLoaded() then
@@ -1348,15 +1340,13 @@ local PhotoMenuBtn = Instance.new("TextButton")
 PhotoMenuBtn.Name = "PhotoMenuBtn"
 PhotoMenuBtn.Size = UDim2.new(0, 36, 0, 36)
 PhotoMenuBtn.Position = UDim2.new(1, -48, 0, 42)
-PhotoMenuBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-PhotoMenuBtn.BackgroundTransparency = 0.35
-PhotoMenuBtn.Text = "⋮"
+PhotoMenuBtn.BackgroundTransparency = 1
+PhotoMenuBtn.Text = "┇"
 PhotoMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 PhotoMenuBtn.Font = Enum.Font.GothamBold
 PhotoMenuBtn.TextSize = 22
 PhotoMenuBtn.ZIndex = 25
 PhotoMenuBtn.Parent = PhotoViewerView
-Instance.new("UICorner", PhotoMenuBtn).CornerRadius = UDim.new(0, 10)
 
 -- Menu (branco sujo + detalhes pretos) com scroll
 local PhotoMenuFrame = Instance.new("Frame")
@@ -1746,12 +1736,179 @@ StopwatchAppIcon.MouseButton1Click:Connect(openStopwatchApp)
 ConfigAppIcon.MouseButton1Click:Connect(openConfigApp)
 GalleryAppIcon.MouseButton1Click:Connect(openGalleryApp)
 
+-- ========== BOOT ANIMATION (primeira vez) ==========
+local BootScreen = Instance.new("Frame")
+BootScreen.Name = "BootScreen"
+BootScreen.Size = UDim2.new(0, 280, 0, 440)
+BootScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BootScreen.BorderSizePixel = 0
+BootScreen.Visible = false
+BootScreen.ZIndex = 50
+BootScreen.Parent = ScreenGui
+Instance.new("UICorner", BootScreen).CornerRadius = UDim.new(0, 28)
+
+local bootBezel = Instance.new("UIStroke")
+bootBezel.Color = Color3.fromRGB(50, 205, 50)
+bootBezel.Thickness = 6
+bootBezel.Parent = BootScreen
+
+local bootEars = Instance.new("ImageLabel")
+bootEars.Size = UDim2.new(0, 340, 0, 95)
+bootEars.Position = UDim2.new(0.5, -170, 0, -48)
+bootEars.BackgroundTransparency = 1
+bootEars.Image = "rbxassetid://108135642658853"
+bootEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
+bootEars.ZIndex = 51
+bootEars.Parent = BootScreen
+
+local bootNotch = Instance.new("Frame")
+bootNotch.Size = UDim2.new(0, 82, 0, 24)
+bootNotch.Position = UDim2.new(0.5, -41, 0, 9)
+bootNotch.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+bootNotch.BorderSizePixel = 0
+bootNotch.ZIndex = 52
+bootNotch.Parent = BootScreen
+Instance.new("UICorner", bootNotch).CornerRadius = UDim.new(1, 0)
+
+local bootLogo = Instance.new("TextLabel")
+bootLogo.Name = "BootLogo"
+bootLogo.Size = UDim2.new(0, 120, 0, 120)
+bootLogo.Position = UDim2.new(0.5, -60, 0.5, -90)
+bootLogo.BackgroundTransparency = 1
+bootLogo.Text = "📱"
+bootLogo.TextSize = 72
+bootLogo.TextTransparency = 1
+bootLogo.ZIndex = 53
+bootLogo.Parent = BootScreen
+
+local bootTitle = Instance.new("TextLabel")
+bootTitle.Name = "BootTitle"
+bootTitle.Size = UDim2.new(1, -40, 0, 36)
+bootTitle.Position = UDim2.new(0, 20, 0.5, 30)
+bootTitle.BackgroundTransparency = 1
+bootTitle.Text = "Tze Phone"
+bootTitle.TextColor3 = Color3.fromRGB(50, 205, 50)
+bootTitle.Font = Enum.Font.GothamBold
+bootTitle.TextSize = 26
+bootTitle.TextTransparency = 1
+bootTitle.ZIndex = 53
+bootTitle.Parent = BootScreen
+
+local bootSub = Instance.new("TextLabel")
+bootSub.Name = "BootSub"
+bootSub.Size = UDim2.new(1, -40, 0, 22)
+bootSub.Position = UDim2.new(0, 20, 0.5, 64)
+bootSub.BackgroundTransparency = 1
+bootSub.Text = "Iniciando..."
+bootSub.TextColor3 = Color3.fromRGB(180, 180, 190)
+bootSub.Font = Enum.Font.Gotham
+bootSub.TextSize = 14
+bootSub.TextTransparency = 1
+bootSub.ZIndex = 53
+bootSub.Parent = BootScreen
+
+-- Loading dots
+local bootDotsFrame = Instance.new("Frame")
+bootDotsFrame.Size = UDim2.new(0, 60, 0, 12)
+bootDotsFrame.Position = UDim2.new(0.5, -30, 0.5, 100)
+bootDotsFrame.BackgroundTransparency = 1
+bootDotsFrame.ZIndex = 53
+bootDotsFrame.Parent = BootScreen
+
+local bootDots = {}
+for i = 1, 3 do
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 8, 0, 8)
+    dot.Position = UDim2.new(0, (i - 1) * 20, 0.5, -4)
+    dot.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+    dot.BackgroundTransparency = 0.7
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 54
+    dot.Parent = bootDotsFrame
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    bootDots[i] = dot
+end
+
+local isBooting = false
+local hasPlayedBootThisSession = false -- reseta toda vez que o script é executado
+
+local function playBootAnimation(onComplete)
+    isBooting = true
+    BootScreen.Position = UDim2.new(1, -300, 1, 80)
+    BootScreen.Visible = true
+    BootScreen.BackgroundTransparency = 0
+    bootLogo.TextTransparency = 1
+    bootTitle.TextTransparency = 1
+    bootSub.TextTransparency = 1
+    for _, d in ipairs(bootDots) do
+        d.BackgroundTransparency = 0.7
+        d.Size = UDim2.new(0, 8, 0, 8)
+    end
+
+    local target = UDim2.new(phoneSettings.phonePosition.X, phoneSettings.phonePosition.XOffset, phoneSettings.phonePosition.Y, phoneSettings.phonePosition.YOffset)
+
+    -- Slide in
+    local slideIn = TweenService:Create(BootScreen, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = target})
+    slideIn:Play()
+    slideIn.Completed:Wait()
+
+    -- Fade in logo + title
+    TweenService:Create(bootLogo, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    task.wait(0.18)
+    TweenService:Create(bootTitle, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    task.wait(0.12)
+    TweenService:Create(bootSub, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+
+    -- Animate dots
+    local dotsRunning = true
+    task.spawn(function()
+        local idx = 1
+        while dotsRunning do
+            for i, d in ipairs(bootDots) do
+                local isActive = (i == idx)
+                TweenService:Create(d, TweenInfo.new(0.18), {
+                    BackgroundTransparency = isActive and 0 or 0.7,
+                    Size = isActive and UDim2.new(0, 10, 0, 10) or UDim2.new(0, 8, 0, 8)
+                }):Play()
+            end
+            idx = idx % 3 + 1
+            task.wait(0.28)
+        end
+    end)
+
+    task.wait(1.65)
+    dotsRunning = false
+
+    -- Fade everything out
+    local fadeInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    TweenService:Create(bootLogo, fadeInfo, {TextTransparency = 1}):Play()
+    TweenService:Create(bootTitle, fadeInfo, {TextTransparency = 1}):Play()
+    TweenService:Create(bootSub, fadeInfo, {TextTransparency = 1}):Play()
+    for _, d in ipairs(bootDots) do
+        TweenService:Create(d, fadeInfo, {BackgroundTransparency = 1}):Play()
+    end
+    task.wait(0.42)
+
+    -- Soft fade of the black screen
+    TweenService:Create(BootScreen, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
+    task.wait(0.32)
+
+    BootScreen.Visible = false
+    BootScreen.BackgroundTransparency = 0
+    isBooting = false
+
+    if onComplete then
+        onComplete()
+    end
+end
+
 -- ========== OPEN / CLOSE PHONE ==========
 local function closePhone()
+    if isBooting then return end
     isInPhotoViewer = false
     exitPhotoViewer()
     local target = UDim2.new(1, -300, 1, 80)
-    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame}
+    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame, BootScreen}
     for _, f in ipairs(frames) do
         if f.Visible then
             local tween = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = target})
@@ -1767,7 +1924,7 @@ local function closePhone()
     selectedFrame.Visible = false
 end
 
-local function openPhone()
+local function openPhoneNormal()
     isPhoneOpen = true
     openHomeScreen()
     PhoneHome.Position = UDim2.new(1, -300, 1, 80)
@@ -1777,6 +1934,33 @@ local function openPhone()
     tween:Play()
     attachVolumeTo(PhoneHome)
     selectedFrame.Visible = true
+end
+
+local function openPhone()
+    if isBooting then return end
+
+    -- Sempre na primeira abertura após executar o script
+    if not hasPlayedBootThisSession then
+        isPhoneOpen = true
+        selectedFrame.Visible = true
+        hasPlayedBootThisSession = true
+
+        -- Prepara a home escondida por baixo
+        openHomeScreen()
+        PhoneHome.Visible = false
+
+        task.spawn(function()
+            playBootAnimation(function()
+                -- Depois do boot, revela a home
+                PhoneHome.Position = UDim2.new(phoneSettings.phonePosition.X, phoneSettings.phonePosition.XOffset, phoneSettings.phonePosition.Y, phoneSettings.phonePosition.YOffset)
+                PhoneHome.Visible = true
+                attachVolumeTo(PhoneHome)
+            end)
+        end)
+        return
+    end
+
+    openPhoneNormal()
 end
 
 local function togglePhone()
@@ -1974,5 +2158,3 @@ if Player.Character then onCharacterAdded(Player.Character) end
 
 refreshFiles()
 refreshPhotos()
-
-print("[TzePhone] Carregado com sucesso! Tecla 0 ou botão 📱 para abrir.")
