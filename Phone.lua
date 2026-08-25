@@ -70,7 +70,10 @@ local function loadSettings()
         end
         phoneSettings = data
     else
-        phoneSettings = table.clone(defaultSettings)
+        phoneSettings = {}
+        for k, v in pairs(defaultSettings) do
+            phoneSettings[k] = v
+        end
     end
 end
 
@@ -1661,57 +1664,61 @@ local function updateContactsList()
     local count = 0
 
     for _, plr in ipairs(players) do
-        if plr == Player then continue end
-        local name = plr.Name
-        local display = plr.DisplayName or name
-        if search ~= "" and not name:lower():find(search) and not display:lower():find(search) then
-            continue
+        if plr ~= Player then
+            local name = plr.Name
+            local display = plr.DisplayName or name
+            local matches = true
+            if search ~= "" and not name:lower():find(search) and not display:lower():find(search) then
+                matches = false
+            end
+
+            if matches then
+                count = count + 1
+                local row = Instance.new("Frame")
+                row.Size = UDim2.new(1, 0, 0, 48)
+                row.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+                row.Parent = ctScroll
+                Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
+
+                local nameLabel = Instance.new("TextLabel")
+                nameLabel.Size = UDim2.new(1, -90, 0, 22)
+                nameLabel.Position = UDim2.new(0, 12, 0, 4)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Text = display
+                nameLabel.TextColor3 = Color3.new(1, 1, 1)
+                nameLabel.Font = Enum.Font.GothamBold
+                nameLabel.TextSize = 14
+                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLabel.Parent = row
+
+                local userLabel = Instance.new("TextLabel")
+                userLabel.Size = UDim2.new(1, -90, 0, 16)
+                userLabel.Position = UDim2.new(0, 12, 0, 26)
+                userLabel.BackgroundTransparency = 1
+                userLabel.Text = "@" .. name
+                userLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
+                userLabel.Font = Enum.Font.Gotham
+                userLabel.TextSize = 11
+                userLabel.TextXAlignment = Enum.TextXAlignment.Left
+                userLabel.Parent = row
+
+                local specBtn = Instance.new("TextButton")
+                specBtn.Size = UDim2.new(0, 70, 0, 32)
+                specBtn.Position = UDim2.new(1, -80, 0.5, -16)
+                specBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+                specBtn.Text = "👁 Ver"
+                specBtn.TextColor3 = Color3.new(0, 0, 0)
+                specBtn.Font = Enum.Font.GothamBold
+                specBtn.TextSize = 13
+                specBtn.Parent = row
+                Instance.new("UICorner", specBtn).CornerRadius = UDim.new(0, 8)
+
+                specBtn.MouseButton1Click:Connect(function()
+                    startSpectate(plr)
+                end)
+            end
         end
-
-        count = count + 1
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, 0, 0, 48)
-        row.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-        row.Parent = ctScroll
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -90, 0, 22)
-        nameLabel.Position = UDim2.new(0, 12, 0, 4)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = display
-        nameLabel.TextColor3 = Color3.new(1, 1, 1)
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextSize = 14
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-        nameLabel.Parent = row
-
-        local userLabel = Instance.new("TextLabel")
-        userLabel.Size = UDim2.new(1, -90, 0, 16)
-        userLabel.Position = UDim2.new(0, 12, 0, 26)
-        userLabel.BackgroundTransparency = 1
-        userLabel.Text = "@" .. name
-        userLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-        userLabel.Font = Enum.Font.Gotham
-        userLabel.TextSize = 11
-        userLabel.TextXAlignment = Enum.TextXAlignment.Left
-        userLabel.Parent = row
-
-        local specBtn = Instance.new("TextButton")
-        specBtn.Size = UDim2.new(0, 70, 0, 32)
-        specBtn.Position = UDim2.new(1, -80, 0.5, -16)
-        specBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-        specBtn.Text = "👁 Ver"
-        specBtn.TextColor3 = Color3.new(0, 0, 0)
-        specBtn.Font = Enum.Font.GothamBold
-        specBtn.TextSize = 13
-        specBtn.Parent = row
-        Instance.new("UICorner", specBtn).CornerRadius = UDim.new(0, 8)
-
-        specBtn.MouseButton1Click:Connect(function()
-            startSpectate(plr)
-        end)
     end
 
     if count == 0 then
