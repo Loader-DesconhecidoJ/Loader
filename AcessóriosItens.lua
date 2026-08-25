@@ -70,7 +70,17 @@ local function loadSettings()
         end
         phoneSettings = data
     else
-        phoneSettings = table.clone(defaultSettings)
+        phoneSettings = {}
+        for k, v in pairs(defaultSettings) do
+            if type(v) == "table" then
+                phoneSettings[k] = {}
+                for k2, v2 in pairs(v) do
+                    phoneSettings[k][k2] = v2
+                end
+            else
+                phoneSettings[k] = v
+            end
+        end
     end
 end
 
@@ -2047,10 +2057,7 @@ end
 
 local function stopHotbarDrag(wasDrag)
     holdStart = 0
-    if holdThread then
-        pcall(function() task.cancel(holdThread) end)
-        holdThread = nil
-    end
+    holdThread = nil -- deixa a thread antiga morrer sozinha
     if isDraggingHotbar then
         isDraggingHotbar = false
         if dragConnection then
