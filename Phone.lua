@@ -1,12 +1,9 @@
 -- =========================================================
--- TZE PHONE ATUALIZADO (só Phone + Câmera + persistência)
--- Removido: BloxyCola, Lanterna, Spray
--- Novo: Câmera, Wallpaper persistente, Galeria com zoom/pinça + exclusão
--- Phone fixo (não arrasta), hold 0.45s no botão para arrastar, tecla 0
+-- TZE PHONE ATUALIZADO (só Phone + persistência)
+-- Removido: BloxyCola, Lanterna, Spray, Câmera
+-- Novo: Wallpaper persistente, Galeria com zoom/pinça + exclusão
+-- Phone fixo (não arrasta), hold 0.45s no botão para arrastar botão ou phone, tecla 0
 -- Configurações salvas em PHONE/settings.json
--- FIX: Botão do phone agora arrasta corretamente + posição salva
--- FIX: Destaque equipado mais fino e verde
--- FIX: Câmera + Galeria agora salvam e mostram fotos corretamente
 -- =========================================================
 
 -- =========================================================
@@ -175,8 +172,8 @@ selectedFrame.BackgroundTransparency = 1
 selectedFrame.Visible = false
 selectedFrame.Parent = phoneSlot
 local selStroke = Instance.new("UIStroke")
-selStroke.Color = Color3.fromRGB(50, 205, 50) -- verde
-selStroke.Thickness = 1.5 -- mais fino
+selStroke.Color = Color3.fromRGB(50, 205, 50)
+selStroke.Thickness = 1.5
 selStroke.Parent = selectedFrame
 Instance.new("UICorner", selectedFrame).CornerRadius = UDim.new(0, 10)
 
@@ -433,7 +430,6 @@ local MusicAppIcon = createAppIcon("Música", "🎵", Color3.fromRGB(0, 180, 255
 local StopwatchAppIcon = createAppIcon("Cronômetro", "⏱️", Color3.fromRGB(255, 140, 30), UDim2.new(0, 85, 0, 0))
 local ConfigAppIcon = createAppIcon("Config", "⚙️", Color3.fromRGB(120, 120, 130), UDim2.new(0, 165, 0, 0))
 local GalleryAppIcon = createAppIcon("Galeria", "🖼️", Color3.fromRGB(180, 80, 220), UDim2.new(0, 5, 0, 100))
-local CameraAppIcon = createAppIcon("Câmera", "📷", Color3.fromRGB(255, 80, 80), UDim2.new(0, 85, 0, 100))
 
 local homeNavBtn, homeBackBtn = createNavBar(PhoneHome)
 
@@ -1423,9 +1419,6 @@ local function openPhotoByIndex(idx)
     PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 
     local success, asset = pcall(function()
-        if photo.isCapture and photo.contentId then
-            return photo.contentId
-        end
         return getcustomasset(photo.path)
     end)
     if success and asset and asset ~= "" then
@@ -1447,9 +1440,7 @@ deletePhotoBtn.MouseButton1Click:Connect(function()
     if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
     local photo = filteredPhotoList[currentPhotoIndex]
     pcall(function()
-        if photo.path then
-            delfile(photo.path)
-        end
+        delfile(photo.path)
     end)
     -- remove da lista
     for i, p in ipairs(photoList) do
@@ -1459,7 +1450,6 @@ deletePhotoBtn.MouseButton1Click:Connect(function()
         end
     end
     exitPhotoViewer()
-    -- atualiza lista
     task.wait(0.1)
     updatePhotoList()
 end)
@@ -1484,7 +1474,7 @@ local function updatePhotoList()
         local emptyLabel = Instance.new("TextLabel")
         emptyLabel.Size = UDim2.new(1, 0, 1, 0)
         emptyLabel.BackgroundTransparency = 1
-        emptyLabel.Text = searchText == "" and "📁 Coloque fotos em PHONE/Photos\nou tire fotos com a Câmera" or "🔍 Nenhuma foto encontrada"
+        emptyLabel.Text = searchText == "" and "📁 Coloque fotos em PHONE/Photos" or "🔍 Nenhuma foto encontrada"
         emptyLabel.TextColor3 = Color3.fromRGB(130, 130, 150)
         emptyLabel.TextSize = 12
         emptyLabel.Parent = emptyFrame
@@ -1498,26 +1488,10 @@ local function updatePhotoList()
             thumbBtn.AutoButtonColor = false
             thumbBtn.Parent = PhotoScrollList
             Instance.new("UICorner", thumbBtn).CornerRadius = UDim.new(0, 10)
-            
-            if photo.isCapture and photo.contentId then
-                thumbBtn.Image = photo.contentId
-            else
-                pcall(function()
-                    local asset = getcustomasset(photo.path)
-                    if asset then thumbBtn.Image = asset end
-                end)
-            end
-            
-            -- placeholder se não tiver imagem
-            if thumbBtn.Image == "" then
-                local placeholder = Instance.new("TextLabel")
-                placeholder.Size = UDim2.new(1, 0, 1, 0)
-                placeholder.BackgroundTransparency = 1
-                placeholder.Text = "📷"
-                placeholder.TextSize = 24
-                placeholder.Parent = thumbBtn
-            end
-            
+            pcall(function()
+                local asset = getcustomasset(photo.path)
+                if asset then thumbBtn.Image = asset end
+            end)
             thumbBtn.MouseButton1Click:Connect(function()
                 openPhotoByIndex(idx)
             end)
@@ -1544,19 +1518,6 @@ local function refreshPhotos()
                 local name = str:match("([^/\\]+)$") or str
                 name = name:gsub("%.%w+$", "")
                 table.insert(photoList, {name = name, path = file})
-            elseif lower:match("%.txt$") and lower:match("capture_") then
-                -- suporte a capturas salvas como .txt com contentId
-                local name = str:match("([^/\\]+)$") or str
-                name = name:gsub("%.txt$", "")
-                local content = ""
-                pcall(function() content = readfile(file) end)
-                local contentId = content:match("rbxassetid_or_content:(.+)")
-                if contentId then
-                    contentId = contentId:match("([^\n]+)")
-                    table.insert(photoList, {name = name, path = file, isCapture = true, contentId = contentId})
-                else
-                    table.insert(photoList, {name = name, path = file, isCapture = true, contentId = ""})
-                end
             end
         end
     end
@@ -1565,149 +1526,6 @@ end
 
 PhotoSearchBox.Changed:Connect(function(prop)
     if prop == "Text" then updatePhotoList() end
-end)
-
--- ========== CÂMERA APP ==========
-local CameraFrame = Instance.new("Frame")
-CameraFrame.Name = "CameraFrame"
-CameraFrame.Size = UDim2.new(0, 280, 0, 440)
-CameraFrame.Position = PhoneHome.Position
-CameraFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-CameraFrame.BorderSizePixel = 0
-CameraFrame.Visible = false
-CameraFrame.Active = true
-CameraFrame.Draggable = false
-CameraFrame.Parent = ScreenGui
-Instance.new("UICorner", CameraFrame).CornerRadius = UDim.new(0, 28)
-
-local camBezel = Instance.new("UIStroke")
-camBezel.Color = Color3.fromRGB(50, 205, 50)
-camBezel.Thickness = 6
-camBezel.Parent = CameraFrame
-
-local camEars = Instance.new("ImageLabel")
-camEars.Size = UDim2.new(0, 340, 0, 95)
-camEars.Position = UDim2.new(0.5, -170, 0, -48)
-camEars.BackgroundTransparency = 1
-camEars.Image = "rbxassetid://108135642658853"
-camEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
-camEars.ZIndex = 10
-camEars.Parent = CameraFrame
-
-local camTitle = Instance.new("TextLabel")
-camTitle.Size = UDim2.new(1, 0, 0, 30)
-camTitle.Position = UDim2.new(0, 0, 0, 45)
-camTitle.BackgroundTransparency = 1
-camTitle.Text = "📷 Câmera"
-camTitle.TextColor3 = Color3.new(1,1,1)
-camTitle.Font = Enum.Font.GothamBold
-camTitle.TextSize = 20
-camTitle.Parent = CameraFrame
-
-local viewfinder = Instance.new("Frame")
-viewfinder.Size = UDim2.new(1, -30, 0, 260)
-viewfinder.Position = UDim2.new(0, 15, 0, 85)
-viewfinder.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-viewfinder.BorderSizePixel = 0
-viewfinder.Parent = CameraFrame
-Instance.new("UICorner", viewfinder).CornerRadius = UDim.new(0, 16)
-
-local viewfinderLabel = Instance.new("TextLabel")
-viewfinderLabel.Size = UDim2.new(1, 0, 1, 0)
-viewfinderLabel.BackgroundTransparency = 1
-viewfinderLabel.Text = "📷\nToque em Capturar\npara tirar a foto"
-viewfinderLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-viewfinderLabel.Font = Enum.Font.Gotham
-viewfinderLabel.TextSize = 16
-viewfinderLabel.TextYAlignment = Enum.TextYAlignment.Center
-viewfinderLabel.Parent = viewfinder
-
-local captureBtn = Instance.new("TextButton")
-captureBtn.Size = UDim2.new(0, 80, 0, 80)
-captureBtn.Position = UDim2.new(0.5, -40, 1, -130)
-captureBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-captureBtn.Text = ""
-captureBtn.Parent = CameraFrame
-Instance.new("UICorner", captureBtn).CornerRadius = UDim.new(1, 0)
-local captureInner = Instance.new("Frame")
-captureInner.Size = UDim2.new(0, 64, 0, 64)
-captureInner.Position = UDim2.new(0.5, -32, 0.5, -32)
-captureInner.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-captureInner.Parent = captureBtn
-Instance.new("UICorner", captureInner).CornerRadius = UDim.new(1, 0)
-
-local camStatus = Instance.new("TextLabel")
-camStatus.Size = UDim2.new(1, -20, 0, 24)
-camStatus.Position = UDim2.new(0, 10, 1, -45)
-camStatus.BackgroundTransparency = 1
-camStatus.Text = ""
-camStatus.TextColor3 = Color3.fromRGB(50, 205, 50)
-camStatus.Font = Enum.Font.Gotham
-camStatus.TextSize = 13
-camStatus.Parent = CameraFrame
-
-local camNavBtn, camBackBtn = createNavBar(CameraFrame)
-
-captureBtn.MouseButton1Click:Connect(function()
-    camStatus.Text = "Capturando..."
-    local flash = Instance.new("Frame")
-    flash.Size = UDim2.new(1, 0, 1, 0)
-    flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    flash.BackgroundTransparency = 0.3
-    flash.ZIndex = 50
-    flash.Parent = CameraFrame
-    Instance.new("UICorner", flash).CornerRadius = UDim.new(0, 28)
-    TweenService:Create(flash, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-    task.delay(0.45, function() flash:Destroy() end)
-
-    local captured = false
-    local timestamp = os.date("%Y%m%d_%H%M%S")
-    local fileName = "PHONE/Photos/Capture_" .. timestamp .. ".txt"
-
-    -- Tenta CaptureService (funciona em alguns executors)
-    pcall(function()
-        local CaptureService = game:GetService("CaptureService")
-        if CaptureService then
-            CaptureService:CaptureScreenshot(function(contentId)
-                if contentId and contentId ~= "" then
-                    pcall(function()
-                        writefile(fileName, "rbxassetid_or_content:" .. tostring(contentId) .. "\n" .. os.date())
-                    end)
-                    -- adiciona direto na lista
-                    table.insert(photoList, {
-                        name = "Capture_" .. timestamp,
-                        path = fileName,
-                        isCapture = true,
-                        contentId = tostring(contentId)
-                    })
-                    camStatus.Text = "Foto salva! Vá na Galeria"
-                    captured = true
-                    task.delay(2, function()
-                        if camStatus then camStatus.Text = "" end
-                    end)
-                    updatePhotoList()
-                end
-            end)
-        end
-    end)
-
-    -- Fallback sempre salva um marcador + tenta criar um placeholder visual
-    if not captured then
-        pcall(function()
-            writefile(fileName, "Captura simulada - " .. os.date() .. "\nUse a galeria do Roblox para fotos reais ou coloque .png/.jpg em PHONE/Photos")
-        end)
-        table.insert(photoList, {
-            name = "Capture_" .. timestamp,
-            path = fileName,
-            isCapture = true,
-            contentId = ""
-        })
-        camStatus.Text = "Marcador salvo! Vá na Galeria"
-        task.delay(2, function()
-            if camStatus then camStatus.Text = "" end
-        end)
-        updatePhotoList()
-    end
 end)
 
 -- ========== NAVEGAÇÃO ==========
@@ -1721,14 +1539,12 @@ local function openHomeScreen()
     StopwatchFrame.Position = pos
     ConfigFrame.Position = pos
     GalleryFrame.Position = pos
-    CameraFrame.Position = pos
 
     PhoneHome.Visible = true
     MainFrame.Visible = false
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    CameraFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(PhoneHome)
     selectedFrame.Visible = true
@@ -1745,7 +1561,6 @@ local function openMusicApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    CameraFrame.Visible = false
     isMusicOpen = true
     refreshFiles()
     attachVolumeTo(MainFrame)
@@ -1762,7 +1577,6 @@ local function openStopwatchApp()
     StopwatchFrame.Visible = true
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    CameraFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(StopwatchFrame)
 end
@@ -1778,7 +1592,6 @@ local function openConfigApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = true
     GalleryFrame.Visible = false
-    CameraFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(ConfigFrame)
 end
@@ -1794,26 +1607,9 @@ local function openGalleryApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = true
-    CameraFrame.Visible = false
     isMusicOpen = false
     refreshPhotos()
     attachVolumeTo(GalleryFrame)
-end
-
-local function openCameraApp()
-    isInPhotoViewer = false
-    exitPhotoViewer()
-    currentApp = "camera"
-    local pos = PhoneHome.Position
-    CameraFrame.Position = pos
-    PhoneHome.Visible = false
-    MainFrame.Visible = false
-    StopwatchFrame.Visible = false
-    ConfigFrame.Visible = false
-    GalleryFrame.Visible = false
-    CameraFrame.Visible = true
-    isMusicOpen = false
-    attachVolumeTo(CameraFrame)
 end
 
 local function goHome()
@@ -1832,27 +1628,24 @@ musicNavBtn.MouseButton1Click:Connect(goHome)
 swNavBtn.MouseButton1Click:Connect(goHome)
 cfgNavBtn.MouseButton1Click:Connect(goHome)
 galNavBtn.MouseButton1Click:Connect(goHome)
-camNavBtn.MouseButton1Click:Connect(goHome)
 
 homeBackBtn.MouseButton1Click:Connect(handleBack)
 musicBackBtn.MouseButton1Click:Connect(handleBack)
 swBackBtn.MouseButton1Click:Connect(handleBack)
 cfgBackBtn.MouseButton1Click:Connect(handleBack)
 galBackBtn.MouseButton1Click:Connect(handleBack)
-camBackBtn.MouseButton1Click:Connect(handleBack)
 
 MusicAppIcon.MouseButton1Click:Connect(openMusicApp)
 StopwatchAppIcon.MouseButton1Click:Connect(openStopwatchApp)
 ConfigAppIcon.MouseButton1Click:Connect(openConfigApp)
 GalleryAppIcon.MouseButton1Click:Connect(openGalleryApp)
-CameraAppIcon.MouseButton1Click:Connect(openCameraApp)
 
 -- ========== OPEN / CLOSE PHONE ==========
 local function closePhone()
     isInPhotoViewer = false
     exitPhotoViewer()
     local target = UDim2.new(1, -300, 1, 80)
-    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame, CameraFrame}
+    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame}
     for _, f in ipairs(frames) do
         if f.Visible then
             local tween = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = target})
@@ -1888,45 +1681,53 @@ local function togglePhone()
     end
 end
 
--- ========== HOLD 0.45s PARA ARRASTAR O BOTÃO DO PHONE (HOTBAR) ==========
+-- ========== HOLD 0.45s PARA ARRASTAR O BOTÃO DO PHONE OU O PHONE ==========
 local holdStart = 0
+local isDraggingPhone = false
 local isDraggingHotbar = false
 local dragConnection = nil
-local dragStartMouse = nil
-local dragStartPos = nil
+local dragOffset = Vector2.new(0, 0)
 
 phoneSlot.MouseButton1Down:Connect(function()
     holdStart = os.clock()
+    local mousePos = UserInputService:GetMouseLocation()
+    if isPhoneOpen then
+        local absPos = PhoneHome.AbsolutePosition
+        dragOffset = Vector2.new(mousePos.X - absPos.X, mousePos.Y - absPos.Y)
+    else
+        local absPos = HotbarFrame.AbsolutePosition
+        dragOffset = Vector2.new(mousePos.X - absPos.X, mousePos.Y - absPos.Y)
+    end
+
     task.delay(0.45, function()
-        if holdStart > 0 and (os.clock() - holdStart) >= 0.45 and not isDraggingHotbar then
-            isDraggingHotbar = true
-            -- animação de "arrastando"
-            TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
-            
-            local mouse = UserInputService:GetMouseLocation()
-            dragStartMouse = Vector2.new(mouse.X, mouse.Y)
-            dragStartPos = HotbarFrame.Position
-            
-            dragConnection = RunService.RenderStepped:Connect(function()
-                if isDraggingHotbar then
-                    local currentMouse = UserInputService:GetMouseLocation()
-                    local delta = Vector2.new(currentMouse.X - dragStartMouse.X, currentMouse.Y - dragStartMouse.Y)
-                    
-                    -- move o HotbarFrame (botão) pela tela
-                    local newX = dragStartPos.X.Offset + delta.X
-                    local newY = dragStartPos.Y.Offset + delta.Y
-                    
-                    -- limita para não sair da tela
-                    local cam = Workspace.CurrentCamera
-                    if cam then
-                        local size = cam.ViewportSize
-                        newX = math.clamp(newX, -20, size.X - 40)
-                        newY = math.clamp(newY, -20, size.Y - 40)
+        if holdStart > 0 and (os.clock() - holdStart) >= 0.45 then
+            if isPhoneOpen then
+                isDraggingPhone = true
+                TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
+                if dragConnection then dragConnection:Disconnect() end
+                dragConnection = RunService.RenderStepped:Connect(function()
+                    if isDraggingPhone then
+                        local mouse = UserInputService:GetMouseLocation()
+                        local newPos = UDim2.new(0, mouse.X - dragOffset.X, 0, mouse.Y - dragOffset.Y)
+                        PhoneHome.Position = newPos
+                        MainFrame.Position = newPos
+                        StopwatchFrame.Position = newPos
+                        ConfigFrame.Position = newPos
+                        GalleryFrame.Position = newPos
                     end
-                    
-                    HotbarFrame.Position = UDim2.new(0, newX, 0, newY)
-                end
-            end)
+                end)
+            else
+                isDraggingHotbar = true
+                TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
+                if dragConnection then dragConnection:Disconnect() end
+                dragConnection = RunService.RenderStepped:Connect(function()
+                    if isDraggingHotbar then
+                        local mouse = UserInputService:GetMouseLocation()
+                        local newPos = UDim2.new(0, mouse.X - dragOffset.X, 0, mouse.Y - dragOffset.Y)
+                        HotbarFrame.Position = newPos
+                    end
+                end)
+            end
         end
     end)
 end)
@@ -1934,16 +1735,28 @@ end)
 phoneSlot.MouseButton1Up:Connect(function()
     local held = os.clock() - holdStart
     holdStart = 0
-    if isDraggingHotbar then
+    if isDraggingPhone then
+        isDraggingPhone = false
+        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
+        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
+        -- salva a nova posição do phone
+        local pos = PhoneHome.Position
+        phoneSettings.phonePosition = {
+            X = pos.X.Scale,
+            Y = pos.Y.Scale,
+            XOffset = pos.X.Offset,
+            YOffset = pos.Y.Offset
+        }
+        saveSettings()
+    elseif isDraggingHotbar then
         isDraggingHotbar = false
         if dragConnection then dragConnection:Disconnect() dragConnection = nil end
         TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-        
         -- salva a nova posição do botão
         local pos = HotbarFrame.Position
         phoneSettings.hotbarPosition = {
-            X = 0,
-            Y = 0,
+            X = pos.X.Scale,
+            Y = pos.Y.Scale,
             XOffset = pos.X.Offset,
             YOffset = pos.Y.Offset
         }
@@ -1957,42 +1770,13 @@ phoneSlot.MouseButton1Up:Connect(function()
 end)
 
 phoneSlot.MouseLeave:Connect(function()
-    if isDraggingHotbar then
+    if isDraggingPhone or isDraggingHotbar then
+        isDraggingPhone = false
         isDraggingHotbar = false
         if dragConnection then dragConnection:Disconnect() dragConnection = nil end
         TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-        
-        local pos = HotbarFrame.Position
-        phoneSettings.hotbarPosition = {
-            X = 0,
-            Y = 0,
-            XOffset = pos.X.Offset,
-            YOffset = pos.Y.Offset
-        }
-        saveSettings()
     end
     holdStart = 0
-end)
-
--- Também suporta arrastar com touch (mobile)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if isDraggingHotbar then
-            isDraggingHotbar = false
-            if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-            TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-            
-            local pos = HotbarFrame.Position
-            phoneSettings.hotbarPosition = {
-                X = 0,
-                Y = 0,
-                XOffset = pos.X.Offset,
-                YOffset = pos.Y.Offset
-            }
-            saveSettings()
-        end
-        holdStart = 0
-    end
 end)
 
 -- Tecla 0 (PC)
@@ -2112,4 +1896,3 @@ refreshFiles()
 refreshPhotos()
 
 print("[TzePhone] Carregado com sucesso! Tecla 0 ou botão 📱 para abrir.")
-print("[TzePhone] Segure 0.45s no botão 📱 para arrastar a posição dele na tela.")
