@@ -69,34 +69,12 @@ end
 local function NukeVFX(obj)
     if IsPartOfCharacter(obj) then
         local className = obj.ClassName
-        if className == "Trail" then
-            task.defer(function()
-                pcall(function()
-                    obj.Texture = ""
-                    obj.TextureMode = Enum.TextureMode.Stretch
-                    obj.TextureLength = 1
-                end)
-            end)
-            return
-        end
         if className == "ParticleEmitter" or className == "Beam" or 
            className == "Fire" or className == "Smoke" or className == "Sparkles" then
             
-            if math.random(1, 100) <= 90 then
-                task.defer(function()
-                    pcall(function() obj:Destroy() end)
-                end)
-            else
-                task.defer(function()
-                    pcall(function()
-                        obj.Enabled = false
-                        if className == "ParticleEmitter" then
-                            obj.Rate = 0
-                            obj.Transparency = NumberSequence.new(1)
-                        end
-                    end)
-                end)
-            end
+            task.defer(function()
+                pcall(function() obj:Destroy() end)
+            end)
         end
         return
     end
@@ -108,35 +86,18 @@ local function NukeVFX(obj)
         return
     end
 
-    if className == "Trail" then
-        task.defer(function()
-            pcall(function()
-                obj.Texture = ""
-                obj.TextureMode = Enum.TextureMode.Stretch
-                obj.TextureLength = 1
-            end)
-        end)
-        return
-    end
-
     if className == "ParticleEmitter" or className == "Beam" or 
        className == "Fire" or className == "Smoke" or className == "Sparkles" then
         
-        if math.random(1, 100) <= 90 then
-            task.defer(function()
-                pcall(function() obj:Destroy() end)
-            end)
-        else
-            task.defer(function()
-                pcall(function()
-                    obj.Enabled = false
-                    if className == "ParticleEmitter" then
-                        obj.Rate = 0
-                        obj.Transparency = NumberSequence.new(1)
-                    end
-                end)
-            end)
-        end
+        task.defer(function()
+            pcall(function() obj:Destroy() end)
+        end)
+    end
+
+    if obj:IsA("Decal") or obj:IsA("Texture") then
+        task.defer(function()
+            pcall(function() obj:Destroy() end)
+        end)
     end
 
     if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
@@ -147,36 +108,22 @@ local function NukeVFX(obj)
                     obj.Material = Enum.Material.Plastic
                     obj.Reflectance = 0
                     obj.CastShadow = false
-                    obj.CanCollide = false
-                    obj.CanQuery = false
-                    obj.CanTouch = false
                 end
                 obj:Destroy()
             end)
         end)
     end
 
-    if obj:IsA("BasePart") and (obj.Name:lower():find("hitbox") or obj.Name:lower():find("hit") or obj.Name:lower():find("colisão") or obj.Name:lower():find("collision") or obj.Transparency >= 0.9) then
-        task.defer(function()
-            pcall(function()
-                obj.CanCollide = false
-                obj.CanQuery = false
-                obj.CanTouch = false
-                obj.Anchored = true
-                obj:Destroy()
-            end)
-        end)
-    end
-
-    if obj:IsA("Sound") and obj.Looped then
-        task.defer(function()
-            pcall(function()
-                obj:Stop()
-                obj.Looped = false
-                obj.Volume = 0
-                obj:Destroy()
-            end)
-        end)
+    if obj:IsA("BasePart") and not obj:IsA("MeshPart") then
+        if obj.Parent == Workspace or (obj.Parent and obj.Parent:IsA("Folder") or obj.Parent:IsA("Model") and not obj.Parent:FindFirstChildOfClass("Humanoid")) then
+            if obj.Anchored == false or obj.Name:lower():find("loose") or obj.Name:lower():find("solta") or obj.Name:lower():find("debris") then
+                task.defer(function()
+                    pcall(function()
+                        obj:Destroy()
+                    end)
+                end)
+            end
+        end
     end
 end
 
@@ -186,45 +133,35 @@ local function CleanStaticObjects()
             continue
         end
 
-        if obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SpecialMesh") or obj:IsA("Sky") or obj:IsA("Atmosphere") then
+        if obj:IsA("Decal") or obj:IsA("Texture") then
             pcall(function() obj:Destroy() end)
-        elseif obj:IsA("BasePart") then
-            pcall(function()
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
-            end)
         end
 
-        if obj:IsA("MeshPart") then
+        if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
             pcall(function()
-                obj.TextureID = ""
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
-                obj.CanCollide = false
-                obj.CanQuery = false
-                obj.CanTouch = false
+                if obj:IsA("MeshPart") then
+                    obj.TextureID = ""
+                    obj.Material = Enum.Material.Plastic
+                    obj.Reflectance = 0
+                    obj.CastShadow = false
+                end
                 obj:Destroy()
             end)
         end
 
-        if obj:IsA("BasePart") and (obj.Name:lower():find("hitbox") or obj.Name:lower():find("hit") or obj.Name:lower():find("colisão") or obj.Name:lower():find("collision") or obj.Transparency >= 0.9) then
-            pcall(function()
-                obj.CanCollide = false
-                obj.CanQuery = false
-                obj.CanTouch = false
-                obj:Destroy()
-            end)
+        if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or 
+           obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            pcall(function() obj:Destroy() end)
         end
 
-        if obj:IsA("Sound") and obj.Looped then
-            pcall(function()
-                obj:Stop()
-                obj.Looped = false
-                obj.Volume = 0
-                obj:Destroy()
-            end)
+        if obj:IsA("BasePart") and not obj:IsA("MeshPart") then
+            if obj.Parent == Workspace or (obj.Parent and (obj.Parent:IsA("Folder") or (obj.Parent:IsA("Model") and not obj.Parent:FindFirstChildOfClass("Humanoid")))) then
+                if obj.Anchored == false or obj.Name:lower():find("loose") or obj.Name:lower():find("solta") or obj.Name:lower():find("debris") then
+                    pcall(function()
+                        obj:Destroy()
+                    end)
+                end
+            end
         end
     end
 end
