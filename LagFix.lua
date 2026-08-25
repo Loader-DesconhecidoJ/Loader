@@ -125,6 +125,21 @@ local function NukeVFX(obj)
             end
         end
     end
+
+    -- Remove sons loopados / congelados que ficam tocando infinitamente
+    if obj:IsA("Sound") then
+        task.defer(function()
+            pcall(function()
+                if obj.Looped or obj.IsPlaying then
+                    obj:Stop()
+                    obj.Looped = false
+                    obj.Volume = 0
+                    obj.Playing = false
+                end
+                obj:Destroy()
+            end)
+        end)
+    end
 end
 
 local function CleanStaticObjects()
@@ -162,6 +177,19 @@ local function CleanStaticObjects()
                     end)
                 end
             end
+        end
+
+        -- Limpa sons loopados / congelados no mapa
+        if obj:IsA("Sound") then
+            pcall(function()
+                if obj.Looped or obj.IsPlaying then
+                    obj:Stop()
+                    obj.Looped = false
+                    obj.Volume = 0
+                    obj.Playing = false
+                end
+                obj:Destroy()
+            end)
         end
     end
 end
