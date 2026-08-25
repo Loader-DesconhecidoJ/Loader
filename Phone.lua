@@ -433,7 +433,7 @@ local MusicAppIcon = createAppIcon("Música", "🎵", Color3.fromRGB(0, 180, 255
 local StopwatchAppIcon = createAppIcon("Cronômetro", "⏱️", Color3.fromRGB(255, 140, 30), UDim2.new(0, 85, 0, 0))
 local ConfigAppIcon = createAppIcon("Config", "⚙️", Color3.fromRGB(120, 120, 130), UDim2.new(0, 165, 0, 0))
 local GalleryAppIcon = createAppIcon("Galeria", "🖼️", Color3.fromRGB(180, 80, 220), UDim2.new(0, 5, 0, 100))
-local ContactsAppIcon = createAppIcon("Contatos", "👥", Color3.fromRGB(0, 200, 120), UDim2.new(0, 85, 0, 100))
+local ContactsAppIcon = createAppIcon("Contatos", "C", Color3.fromRGB(0, 200, 120), UDim2.new(0, 85, 0, 100))
 
 local homeNavBtn, homeBackBtn = createNavBar(PhoneHome)
 
@@ -1571,7 +1571,7 @@ local ctTitle = Instance.new("TextLabel")
 ctTitle.Size = UDim2.new(1, 0, 0, 30)
 ctTitle.Position = UDim2.new(0, 0, 0, 42)
 ctTitle.BackgroundTransparency = 1
-ctTitle.Text = "👥 Contatos"
+ctTitle.Text = "Contatos"
 ctTitle.TextColor3 = Color3.new(1, 1, 1)
 ctTitle.Font = Enum.Font.GothamBold
 ctTitle.TextSize = 20
@@ -1581,7 +1581,7 @@ local ctSearchBox = Instance.new("TextBox")
 ctSearchBox.Size = UDim2.new(1, -24, 0, 32)
 ctSearchBox.Position = UDim2.new(0, 12, 0, 80)
 ctSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-ctSearchBox.PlaceholderText = "🔍 Pesquisar player..."
+ctSearchBox.PlaceholderText = "Pesquisar player..."
 ctSearchBox.Text = ""
 ctSearchBox.TextColor3 = Color3.new(1, 1, 1)
 ctSearchBox.Font = Enum.Font.Gotham
@@ -1606,7 +1606,7 @@ local spectateBtn = Instance.new("TextButton")
 spectateBtn.Size = UDim2.new(1, -24, 0, 36)
 spectateBtn.Position = UDim2.new(0, 12, 1, -80)
 spectateBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-spectateBtn.Text = "⏹ Parar Spectate"
+spectateBtn.Text = "Parar Spectate"
 spectateBtn.TextColor3 = Color3.new(1, 1, 1)
 spectateBtn.Font = Enum.Font.GothamBold
 spectateBtn.TextSize = 14
@@ -1649,7 +1649,7 @@ local function startSpectate(player)
     cam.CameraSubject = hum
     cam.CameraType = Enum.CameraType.Custom
     spectateBtn.Visible = true
-    spectateBtn.Text = "⏹ Parar Spectate (" .. (player.DisplayName or player.Name) .. ")"
+    spectateBtn.Text = "Parar Spectate (" .. (player.DisplayName or player.Name) .. ")"
 end
 
 spectateBtn.MouseButton1Click:Connect(stopSpectate)
@@ -1689,7 +1689,6 @@ local function updateContactsList()
                 nameLabel.Font = Enum.Font.GothamBold
                 nameLabel.TextSize = 14
                 nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-                nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 nameLabel.Parent = row
 
                 local userLabel = Instance.new("TextLabel")
@@ -1707,7 +1706,7 @@ local function updateContactsList()
                 specBtn.Size = UDim2.new(0, 70, 0, 32)
                 specBtn.Position = UDim2.new(1, -80, 0.5, -16)
                 specBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-                specBtn.Text = "👁 Ver"
+                specBtn.Text = "Ver"
                 specBtn.TextColor3 = Color3.new(0, 0, 0)
                 specBtn.Font = Enum.Font.GothamBold
                 specBtn.TextSize = 13
