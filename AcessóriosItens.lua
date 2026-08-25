@@ -1,11 +1,138 @@
 -- =========================================================
--- MENU DE SELEÇÃO INICIAL (apenas Phone)
+-- MENU DE SELEÃ‡ÃƒO INICIAL (apenas Phone)
 -- =========================================================
 local selectedItems = {
-    TzesPhone = true
+    TzesPhone   = false
 }
 
-local menuConfirmed = true  -- já confirma automaticamente (só tem Phone)
+local menuConfirmed = false
+
+do
+    local CoreGui = game:GetService("CoreGui")
+    local TweenService = game:GetService("TweenService")
+    local Workspace = game:GetService("Workspace")
+
+    if CoreGui:FindFirstChild("TzeSelectMenu") then
+        CoreGui.TzeSelectMenu:Destroy()
+    end
+
+    local SelectGui = Instance.new("ScreenGui")
+    SelectGui.Name = "TzeSelectMenu"
+    SelectGui.ResetOnSpawn = false
+    SelectGui.IgnoreGuiInset = true
+    SelectGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    SelectGui.Parent = CoreGui
+
+    local Main = Instance.new("Frame")
+    Main.Name = "Main"
+    Main.Size = UDim2.new(0, 210, 0, 120)
+    Main.Position = UDim2.new(0.5, -105, 0.5, -60)
+    Main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+    Main.BorderSizePixel = 0
+    Main.Parent = SelectGui
+    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+
+    -- Escala adaptativa para todos os dispositivos
+    local selectUIScale = Instance.new("UIScale")
+    selectUIScale.Parent = Main
+    local function updateSelectScale()
+        local cam = Workspace.CurrentCamera
+        if cam then
+            local size = cam.ViewportSize
+            local scale = math.clamp(math.min(size.X / 420, size.Y / 320), 0.65, 1.4)
+            selectUIScale.Scale = scale
+        end
+    end
+    updateSelectScale()
+    if Workspace.CurrentCamera then
+        Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateSelectScale)
+    end
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(50, 205, 50)
+    stroke.Thickness = 2
+    stroke.Parent = Main
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 22)
+    title.Position = UDim2.new(0, 0, 0, 6)
+    title.BackgroundTransparency = 1
+    title.Text = "Escolha os itens"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 13
+    title.Parent = Main
+
+    local items = {
+        {Key = "TzesPhone",   Emoji = "ðŸ“±", Name = "Phone"}
+    }
+
+    local toggleButtons = {}
+
+    for i, data in ipairs(items) do
+        local btn = Instance.new("TextButton")
+        btn.Name = data.Key
+        btn.Size = UDim2.new(0, 190, 0, 32)
+        btn.Position = UDim2.new(0, 10, 0, 36)
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+        btn.Text = data.Emoji .. " " .. data.Name
+        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 13
+        btn.AutoButtonColor = false
+        btn.Parent = Main
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+        local btnStroke = Instance.new("UIStroke")
+        btnStroke.Color = Color3.fromRGB(60, 60, 70)
+        btnStroke.Thickness = 1.2
+        btnStroke.Parent = btn
+
+        toggleButtons[data.Key] = {button = btn, stroke = btnStroke, selected = false}
+
+        btn.MouseButton1Click:Connect(function()
+            local info = toggleButtons[data.Key]
+            info.selected = not info.selected
+            if info.selected then
+                info.button.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+                info.button.TextColor3 = Color3.fromRGB(10, 10, 15)
+                info.stroke.Color = Color3.fromRGB(40, 160, 40)
+            else
+                info.button.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+                info.button.TextColor3 = Color3.fromRGB(200, 200, 200)
+                info.stroke.Color = Color3.fromRGB(60, 60, 70)
+            end
+        end)
+    end
+
+    local confirmBtn = Instance.new("TextButton")
+    confirmBtn.Size = UDim2.new(0, 190, 0, 28)
+    confirmBtn.Position = UDim2.new(0, 10, 0, 78)
+    confirmBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+    confirmBtn.Text = "Confirmar"
+    confirmBtn.TextColor3 = Color3.fromRGB(10, 10, 15)
+    confirmBtn.Font = Enum.Font.GothamBold
+    confirmBtn.TextSize = 13
+    confirmBtn.AutoButtonColor = false
+    confirmBtn.Parent = Main
+    Instance.new("UICorner", confirmBtn).CornerRadius = UDim.new(0, 7)
+
+    confirmBtn.MouseButton1Click:Connect(function()
+        for key, info in pairs(toggleButtons) do
+            selectedItems[key] = info.selected
+        end
+        -- Sempre forÃ§a o Phone se nÃ£o selecionou nada (script agora sÃ³ tem Phone)
+        if not selectedItems.TzesPhone then
+            selectedItems.TzesPhone = true
+        end
+        menuConfirmed = true
+        SelectGui:Destroy()
+    end)
+
+    while not menuConfirmed do
+        task.wait(0.1)
+    end
+end
 
 -- =========================================================
 -- CRIA PASTA ORGANIZADA: PHONE / Music + Photos
@@ -27,57 +154,52 @@ end
 criarPastasPhone()
 
 -- =========================================================
--- SISTEMA DE CONFIGURAÇÃO PERSISTENTE (JSON)
+-- SISTEMA DE CONFIGURAÃ‡Ã•ES PERSISTENTES (JSON)
 -- =========================================================
-local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "PHONE/config_phone.json"
+local CONFIG_PATH = "PHONE/phone_config.json"
 
-local defaultConfig = {
+local phoneSettings = {
     fpsEnabled = false,
     flashlightEnabled = false,
+    joinTime = os.clock(),
     volume = 1,
-    wallpaperId = "rbxassetid://12506271392",  -- wallpaper padrão
-    wallpaperFromPhotos = false,
-    wallpaperPhotoPath = ""
+    wallpaper = "rbxassetid://12506271392", -- padrÃ£o
+    phoneButtonPos = nil -- {xScale, xOffset, yScale, yOffset}
 }
-
-local phoneConfig = {}
-
-local function loadConfig()
-    local success, result = pcall(function()
-        if isfile(CONFIG_FILE) then
-            local content = readfile(CONFIG_FILE)
-            return HttpService:JSONDecode(content)
-        else
-            local json = HttpService:JSONEncode(defaultConfig)
-            writefile(CONFIG_FILE, json)
-            return defaultConfig
-        end
-    end)
-    
-    if success and type(result) == "table" then
-        phoneConfig = result
-        -- garante que todas as chaves existam
-        for k, v in pairs(defaultConfig) do
-            if phoneConfig[k] == nil then
-                phoneConfig[k] = v
-            end
-        end
-    else
-        phoneConfig = table.clone(defaultConfig)
-    end
-end
 
 local function saveConfig()
     pcall(function()
-        writefile(CONFIG_FILE, HttpService:JSONEncode(phoneConfig))
+        local data = {
+            fpsEnabled = phoneSettings.fpsEnabled,
+            flashlightEnabled = phoneSettings.flashlightEnabled,
+            volume = phoneSettings.volume,
+            wallpaper = phoneSettings.wallpaper,
+            phoneButtonPos = phoneSettings.phoneButtonPos
+        }
+        writefile(CONFIG_PATH, game:GetService("HttpService"):JSONEncode(data))
+    end)
+end
+
+local function loadConfig()
+    pcall(function()
+        if isfile(CONFIG_PATH) then
+            local raw = readfile(CONFIG_PATH)
+            local data = game:GetService("HttpService"):JSONDecode(raw)
+            if type(data) == "table" then
+                if data.fpsEnabled ~= nil then phoneSettings.fpsEnabled = data.fpsEnabled end
+                if data.flashlightEnabled ~= nil then phoneSettings.flashlightEnabled = data.flashlightEnabled end
+                if data.volume ~= nil then phoneSettings.volume = data.volume end
+                if data.wallpaper and data.wallpaper ~= "" then phoneSettings.wallpaper = data.wallpaper end
+                if data.phoneButtonPos then phoneSettings.phoneButtonPos = data.phoneButtonPos end
+            end
+        end
     end)
 end
 
 loadConfig()
 
 -- =========================================================
--- SCRIPT PRINCIPAL
+-- SCRIPT PRINCIPAL (sÃ³ cria o que foi selecionado)
 -- =========================================================
 local SETTINGS = {
     JumpPower        = 50,
@@ -90,7 +212,6 @@ local originalWalkSpeed = 16
 
 local isPhoneOpen = false
 local isMusicOpen = false
-local currentPaintColor = Color3.fromRGB(255, 0, 0)
 local fovTween = nil
 
 local TweenService = game:GetService("TweenService")
@@ -98,44 +219,59 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local Stats = game:GetService("Stats")
+local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
+local CaptureService = game:GetService("CaptureService")
 
 local isTouchDevice = UserInputService.TouchEnabled
 
 local SOUNDS = {}
 
-local phoneSettings = {
-    fpsEnabled = phoneConfig.fpsEnabled,
-    flashlightEnabled = phoneConfig.flashlightEnabled,
-    joinTime = os.clock()
-}
-
 local fpsLabel = nil
 local phoneFlashlight = nil
 
 -- Estados de "equipamento" via hotbar (sem Tools)
-local equippedItem = nil
-local phoneModel = nil  -- modelo 3D na mão
+local equippedItem = nil          -- "TzesPhone" | nil
 
 local function createSounds()
-    for _, sound in pairs(Player:WaitForChild("PlayerGui"):GetChildren()) do
-        if sound:IsA("Sound") and (sound.SoundId == "rbxassetid://138475744729338") then
-            sound:Destroy()
-        end
-    end
+    -- sem sons de cola
 end
 
 createSounds()
 
+local function tweenFOV(targetFOV, duration)
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+    if fovTween then
+        pcall(function() fovTween:Cancel() end)
+        fovTween = nil
+    end
+    fovTween = TweenService:Create(cam, TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+        FieldOfView = targetFOV
+    })
+    fovTween:Play()
+end
+
+local function resetFOV()
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+    if fovTween then
+        pcall(function() fovTween:Cancel() end)
+        fovTween = nil
+    end
+end
+
 local function cleanup()
+    resetFOV()
+
+    if Humanoid then
+        Humanoid.JumpPower = SETTINGS.JumpPower
+        Humanoid.WalkSpeed = originalWalkSpeed
+    end
+
     if phoneFlashlight then
         phoneFlashlight:Destroy()
         phoneFlashlight = nil
-    end
-
-    if phoneModel then
-        pcall(function() phoneModel:Destroy() end)
-        phoneModel = nil
     end
 
     equippedItem = nil
@@ -165,52 +301,7 @@ local function updateMovementStats()
 end
 
 -- =========================================================
--- MODELO 3D DO PHONE NA MÃO (SEM TOOL)
--- =========================================================
-local function createPhoneModel()
-    if phoneModel then
-        pcall(function() phoneModel:Destroy() end)
-        phoneModel = nil
-    end
-    if not Character then return end
-
-    local rightHand = Character:FindFirstChild("RightHand") or Character:FindFirstChild("Right Arm")
-    if not rightHand then return end
-
-    local handle = Instance.new("Part")
-    handle.Name = "TzePhoneModel"
-    handle.Size = Vector3.new(0.4, 0.8, 0.2)
-    handle.Material = Enum.Material.SmoothPlastic
-    handle.BrickColor = BrickColor.new("Lime green")
-    handle.CanCollide = false
-    handle.Massless = true
-    handle.Anchored = false
-    handle.Parent = Character
-
-    local mesh = Instance.new("SpecialMesh")
-    mesh.MeshId = "rbxassetid://130757014132786"
-    mesh.TextureId = "rbxassetid://101684537135469"
-    mesh.Scale = Vector3.new(1, 1, 1)
-    mesh.Parent = handle
-
-    local weld = Instance.new("Weld")
-    weld.Part0 = rightHand
-    weld.Part1 = handle
-    weld.C0 = CFrame.new(0, -0.15, -0.35) * CFrame.Angles(math.rad(-10), math.rad(180), math.rad(0))
-    weld.Parent = handle
-
-    phoneModel = handle
-end
-
-local function destroyPhoneModel()
-    if phoneModel then
-        pcall(function() phoneModel:Destroy() end)
-        phoneModel = nil
-    end
-end
-
--- =========================================================
--- CUSTOM HOTBAR (apenas Phone) - SEM TOOLS
+-- CUSTOM HOTBAR (sÃ³ o Phone) - SEM TOOLS
 -- =========================================================
 local HotbarGui = Instance.new("ScreenGui")
 HotbarGui.Name = "TzeCustomHotbar"
@@ -221,12 +312,13 @@ HotbarGui.Parent = game:GetService("CoreGui")
 
 local HotbarFrame = Instance.new("Frame")
 HotbarFrame.Name = "HotbarFrame"
-HotbarFrame.Size = UDim2.new(0, 42, 0, 40)
-HotbarFrame.Position = UDim2.new(1, -52, 1, -72)
+HotbarFrame.Size = UDim2.new(0, 48, 0, 48)
+HotbarFrame.Position = UDim2.new(1, -60, 1, -80)
 HotbarFrame.BackgroundTransparency = 1
 HotbarFrame.Visible = true
 HotbarFrame.Parent = HotbarGui
 
+-- Escala adaptativa da Hotbar (maior em dispositivos touch)
 local hotbarUIScale = Instance.new("UIScale")
 hotbarUIScale.Parent = HotbarFrame
 local function updateHotbarScale()
@@ -246,7 +338,7 @@ if Workspace.CurrentCamera then
 end
 
 local slotsData = {
-    {Name = "TzesPhone",  Emoji = "📱", Color = Color3.fromRGB(50, 205, 50),   ToolName = "TzesPhone"}
+    {Name = "TzesPhone",  Emoji = "ðŸ“±", Color = Color3.fromRGB(50, 205, 50),   ToolName = "TzesPhone"}
 }
 
 local slotButtons = {}
@@ -259,29 +351,31 @@ for _, data in ipairs(slotsData) do
 end
 
 -- =========================================================
--- FUNÇÕES DE ATIVAÇÃO / DESATIVAÇÃO (sem Tools)
+-- FUNÃ‡Ã•ES DE ATIVAÃ‡ÃƒO / DESATIVAÃ‡ÃƒO (sem Tools)
 -- =========================================================
 local closePhone, openPhone, togglePhone
 
 local function unequipAll()
+    -- Phone (fecha se estiver aberto)
     if isPhoneOpen and closePhone then
         closePhone()
     end
-    destroyPhoneModel()
     equippedItem = nil
 end
 
 local function equipItem(toolName)
     if equippedItem == toolName then
+        -- JÃ¡ estÃ¡ equipado â†’ desequipa
         unequipAll()
         return
     end
 
+    -- Desequipa o anterior
     unequipAll()
+
     equippedItem = toolName
 
     if toolName == "TzesPhone" then
-        createPhoneModel()
         if togglePhone then
             togglePhone()
         end
@@ -291,8 +385,8 @@ end
 local function createSlot(index, data)
     local slot = Instance.new("TextButton")
     slot.Name = "Slot_" .. data.ToolName
-    slot.Size = UDim2.new(0, 32, 0, 32)
-    slot.Position = UDim2.new(0, (index-1) * 38, 0, 4)
+    slot.Size = UDim2.new(0, 40, 0, 40)
+    slot.Position = UDim2.new(0, 4, 0, 4)
     slot.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
     slot.BorderSizePixel = 0
     slot.Text = ""
@@ -300,7 +394,7 @@ local function createSlot(index, data)
     slot.Parent = HotbarFrame
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = slot
 
     local stroke = Instance.new("UIStroke")
@@ -315,13 +409,13 @@ local function createSlot(index, data)
     shadow.BackgroundTransparency = 0.55
     shadow.ZIndex = slot.ZIndex - 1
     shadow.Parent = slot
-    Instance.new("UICorner", shadow).CornerRadius = UDim.new(0, 10)
+    Instance.new("UICorner", shadow).CornerRadius = UDim.new(0, 12)
 
     local emoji = Instance.new("TextLabel")
     emoji.Size = UDim2.new(1, 0, 1, 0)
     emoji.BackgroundTransparency = 1
     emoji.Text = data.Emoji
-    emoji.TextSize = 18
+    emoji.TextSize = 22
     emoji.Parent = slot
 
     local selected = Instance.new("Frame")
@@ -337,91 +431,110 @@ local function createSlot(index, data)
     selStroke.Color = Color3.fromRGB(255, 255, 255)
     selStroke.Thickness = 2.5
     selStroke.Parent = selected
-    Instance.new("UICorner", selected).CornerRadius = UDim.new(0, 10)
+    Instance.new("UICorner", selected).CornerRadius = UDim.new(0, 12)
 
-    -- Sistema de arrastar o botão (segura 0.45s)
-    local holdStart = 0
+    -- Sistema de arrastar o botÃ£o do phone (segurar 0.45s)
     local isDragging = false
-    local dragOffset = Vector2.new(0, 0)
+    local dragStartTime = 0
     local dragConnection = nil
     local holdConnection = nil
+    local originalPos = slot.Position
+    local dragOffset = Vector2.new(0, 0)
 
-    slot.MouseButton1Down:Connect(function()
-        holdStart = os.clock()
-        isDragging = false
+    local function startDrag(input)
+        if isDragging then return end
+        isDragging = true
+        slot.ZIndex = 50
+        -- AnimaÃ§Ã£o de "pegar"
+        TweenService:Create(slot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 48, 0, 48),
+            BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+        }):Play()
+        local strokeTween = TweenService:Create(stroke, TweenInfo.new(0.15), {Thickness = 3.5})
+        strokeTween:Play()
 
-        holdConnection = RunService.Heartbeat:Connect(function()
-            if os.clock() - holdStart >= 0.45 and not isDragging then
-                isDragging = true
-                if holdConnection then holdConnection:Disconnect() holdConnection = nil end
+        local startPos = input.Position
+        dragOffset = Vector2.new(slot.AbsolutePosition.X - startPos.X, slot.AbsolutePosition.Y - startPos.Y)
 
-                -- Animação de "arrastando"
-                TweenService:Create(slot, TweenInfo.new(0.15), {
-                    Size = UDim2.new(0, 38, 0, 38),
-                    BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-                }):Play()
-
-                local mouse = UserInputService:GetMouseLocation()
-                local absPos = HotbarFrame.AbsolutePosition
-                dragOffset = Vector2.new(mouse.X - absPos.X, mouse.Y - absPos.Y)
-
-                dragConnection = RunService.RenderStepped:Connect(function()
-                    if not isDragging then return end
-                    local mousePos = UserInputService:GetMouseLocation()
-                    local newX = mousePos.X - dragOffset.X
-                    local newY = mousePos.Y - dragOffset.Y
-                    HotbarFrame.Position = UDim2.new(0, newX, 0, newY)
-                end)
+        dragConnection = UserInputService.InputChanged:Connect(function(inp)
+            if not isDragging then return end
+            if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
+                local newX = inp.Position.X + dragOffset.X
+                local newY = inp.Position.Y + dragOffset.Y
+                local cam = Workspace.CurrentCamera
+                if cam then
+                    local vs = cam.ViewportSize
+                    newX = math.clamp(newX, 0, vs.X - slot.AbsoluteSize.X)
+                    newY = math.clamp(newY, 0, vs.Y - slot.AbsoluteSize.Y)
+                end
+                -- Converte para posiÃ§Ã£o relativa ao HotbarFrame parent (que Ã© full screen via Absolute)
+                -- Como HotbarFrame estÃ¡ posicionado, movemos o prÃ³prio HotbarFrame
+                HotbarFrame.Position = UDim2.new(0, newX, 0, newY)
             end
         end)
+    end
+
+    local function stopDrag()
+        if not isDragging then return end
+        isDragging = false
+        if dragConnection then
+            dragConnection:Disconnect()
+            dragConnection = nil
+        end
+        slot.ZIndex = 1
+        TweenService:Create(slot, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 40, 0, 40),
+            BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+        }):Play()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {Thickness = 2.5}):Play()
+
+        -- Salva posiÃ§Ã£o
+        local absPos = HotbarFrame.AbsolutePosition
+        local cam = Workspace.CurrentCamera
+        if cam then
+            local vs = cam.ViewportSize
+            phoneSettings.phoneButtonPos = {
+                xScale = 0,
+                xOffset = absPos.X,
+                yScale = 0,
+                yOffset = absPos.Y
+            }
+            saveConfig()
+        end
+    end
+
+    slot.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragStartTime = os.clock()
+            holdConnection = task.delay(0.45, function()
+                if holdConnection then
+                    startDrag(input)
+                end
+            end)
+        end
     end)
 
-    slot.MouseButton1Up:Connect(function()
-        if holdConnection then
-            holdConnection:Disconnect()
-            holdConnection = nil
-        end
-
-        if isDragging then
-            isDragging = false
-            if dragConnection then
-                dragConnection:Disconnect()
-                dragConnection = nil
+    slot.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if holdConnection then
+                task.cancel(holdConnection)
+                holdConnection = nil
             end
-            TweenService:Create(slot, TweenInfo.new(0.15), {
-                Size = UDim2.new(0, 32, 0, 32),
-                BackgroundColor3 = Color3.fromRGB(28, 28, 36)
-            }):Play()
-        else
-            -- Clique normal
-            equipItem(data.ToolName)
+            if isDragging then
+                stopDrag()
+            else
+                -- Clique normal (menos de 0.45s)
+                if os.clock() - dragStartTime < 0.45 then
+                    equipItem(data.ToolName)
+                end
+            end
         end
     end)
 
+    -- TambÃ©m para mouse leave em PC
     slot.MouseLeave:Connect(function()
-        if holdConnection then
-            holdConnection:Disconnect()
-            holdConnection = nil
-        end
         if isDragging then
-            isDragging = false
-            if dragConnection then
-                dragConnection:Disconnect()
-                dragConnection = nil
-            end
-            TweenService:Create(slot, TweenInfo.new(0.15), {
-                Size = UDim2.new(0, 32, 0, 32),
-                BackgroundColor3 = Color3.fromRGB(28, 28, 36)
-            }):Play()
-        end
-    end)
-
-    slot.MouseEnter:Connect(function()
-        if not isDragging then
-            TweenService:Create(slot, TweenInfo.new(0.12), {
-                BackgroundColor3 = Color3.fromRGB(42, 42, 52),
-                Size = UDim2.new(0, 34, 0, 34)
-            }):Play()
+            stopDrag()
         end
     end)
 
@@ -434,8 +547,14 @@ for i, data in ipairs(activeSlots) do
 end
 
 if #activeSlots > 0 then
-    HotbarFrame.Size = UDim2.new(0, (#activeSlots * 38) + 4, 0, 40)
-    HotbarFrame.Position = UDim2.new(1, -((#activeSlots * 38) + 10), 1, -72)
+    HotbarFrame.Size = UDim2.new(0, 48, 0, 48)
+    -- Restaura posiÃ§Ã£o salva se existir
+    if phoneSettings.phoneButtonPos then
+        local p = phoneSettings.phoneButtonPos
+        HotbarFrame.Position = UDim2.new(p.xScale or 0, p.xOffset or 0, p.yScale or 0, p.yOffset or 0)
+    else
+        HotbarFrame.Position = UDim2.new(1, -60, 1, -80)
+    end
 else
     HotbarFrame.Visible = false
 end
@@ -454,7 +573,8 @@ task.spawn(function()
 end)
 
 -- =========================================================
--- TZE PHONE SYSTEM + MUSIC + CRONÔMETRO + CONFIG + GALERIA + CÂMERA
+-- TZE PHONE SYSTEM + MUSIC + CRONÃ”METRO + CONFIG + GALERIA + CÃ‚MERA
+-- (sÃ³ Ã© criado se o Phone foi selecionado)
 -- =========================================================
 if selectedItems.TzesPhone then
 local CoreGui = game:GetService("CoreGui")
@@ -467,6 +587,7 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
+-- Escala adaptativa do Phone para todos os dispositivos (PC, Mobile, Tablet, Console)
 local phoneUIScale = Instance.new("UIScale")
 phoneUIScale.Parent = ScreenGui
 local function updatePhoneScale()
@@ -498,7 +619,7 @@ local filteredList = {}
 local currentTrackIndex = 0
 local shuffleMode = false
 local repeatMode = false
-local currentVolume = phoneConfig.volume or 1
+local currentVolume = phoneSettings.volume or 1
 isMusicOpen = false
 isPhoneOpen = false
 local currentApp = "home"
@@ -508,13 +629,6 @@ local photoList = {}
 local filteredPhotoList = {}
 local isInPhotoViewer = false
 local currentPhotoIndex = 0
-local isSlideshow = false
-local slideshowConnection = nil
-
--- Zoom pinça
-local pinchStartDistance = 0
-local currentZoom = 1
-local photoDisplayOriginalSize = nil
 
 local function createNavBar(parent)
     local navBar = Instance.new("Frame")
@@ -528,24 +642,26 @@ local function createNavBar(parent)
     navBar.Parent = parent
     Instance.new("UICorner", navBar).CornerRadius = UDim.new(0, 14)
 
+    -- â—€  um pouco mais para a DIREITA
     local backBtn = Instance.new("TextButton")
     backBtn.Name = "BackBtn"
     backBtn.Size = UDim2.new(0, 28, 0, 28)
     backBtn.Position = UDim2.new(0, 22, 0.5, -14)
     backBtn.BackgroundTransparency = 1
-    backBtn.Text = "◀"
+    backBtn.Text = "â—€"
     backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     backBtn.TextSize = 20
     backBtn.Font = Enum.Font.GothamBold
     backBtn.ZIndex = 21
     backBtn.Parent = navBar
 
+    -- â—¯  fica no MEIO
     local homeBtn = Instance.new("TextButton")
     homeBtn.Name = "HomeCircle"
     homeBtn.Size = UDim2.new(0, 28, 0, 28)
     homeBtn.Position = UDim2.new(0.5, -14, 0.5, -14)
     homeBtn.BackgroundTransparency = 1
-    homeBtn.Text = "◯"
+    homeBtn.Text = "â—¯"
     homeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     homeBtn.TextSize = 22
     homeBtn.Font = Enum.Font.GothamBold
@@ -575,7 +691,7 @@ local function createNavBar(parent)
     return homeBtn, backBtn
 end
 
--- ========== PHONE HOME SCREEN (FIXO - NÃO ARRASTA) ==========
+-- ========== PHONE HOME SCREEN (FIXO - nÃ£o arrastÃ¡vel) ==========
 local PhoneHome = Instance.new("Frame")
 PhoneHome.Name = "PhoneHome"
 PhoneHome.Size = UDim2.new(0, 280, 0, 440)
@@ -584,7 +700,7 @@ PhoneHome.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 PhoneHome.BorderSizePixel = 0
 PhoneHome.Visible = false
 PhoneHome.Active = true
-PhoneHome.Draggable = false  -- FIXO
+PhoneHome.Draggable = false -- FIXO
 PhoneHome.Parent = ScreenGui
 
 Instance.new("UICorner", PhoneHome).CornerRadius = UDim.new(0, 28)
@@ -598,21 +714,11 @@ local homeBg = Instance.new("ImageLabel")
 homeBg.Name = "Wallpaper"
 homeBg.Size = UDim2.new(1, 0, 1, 0)
 homeBg.BackgroundTransparency = 1
-homeBg.Image = phoneConfig.wallpaperId or "rbxassetid://12506271392"
+homeBg.Image = phoneSettings.wallpaper or "rbxassetid://12506271392"
 homeBg.ScaleType = Enum.ScaleType.Crop
 homeBg.ZIndex = 1
 homeBg.Parent = PhoneHome
 Instance.new("UICorner", homeBg).CornerRadius = UDim.new(0, 28)
-
--- Aplica wallpaper salvo de foto se existir
-if phoneConfig.wallpaperFromPhotos and phoneConfig.wallpaperPhotoPath ~= "" then
-    pcall(function()
-        local asset = getcustomasset(phoneConfig.wallpaperPhotoPath)
-        if asset then
-            homeBg.Image = asset
-        end
-    end)
-end
 
 local homeOverlay = Instance.new("Frame")
 homeOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -674,7 +780,7 @@ fpsLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
 fpsLabel.Font = Enum.Font.GothamBold
 fpsLabel.TextSize = 13
 fpsLabel.TextXAlignment = Enum.TextXAlignment.Right
-fpsLabel.Visible = phoneConfig.fpsEnabled
+fpsLabel.Visible = phoneSettings.fpsEnabled
 fpsLabel.ZIndex = 5
 fpsLabel.Parent = PhoneHome
 
@@ -736,11 +842,11 @@ local function createAppIcon(name, emoji, color, pos)
     return icon
 end
 
-local MusicAppIcon = createAppIcon("Música", "🎵", Color3.fromRGB(0, 180, 255), UDim2.new(0, 5, 0, 0))
-local StopwatchAppIcon = createAppIcon("Cronômetro", "⏱️", Color3.fromRGB(255, 140, 30), UDim2.new(0, 85, 0, 0))
-local ConfigAppIcon = createAppIcon("Config", "⚙️", Color3.fromRGB(120, 120, 130), UDim2.new(0, 165, 0, 0))
-local GalleryAppIcon = createAppIcon("Galeria", "🖼️", Color3.fromRGB(180, 80, 220), UDim2.new(0, 5, 0, 100))
-local CameraAppIcon = createAppIcon("Câmera", "📷", Color3.fromRGB(255, 80, 80), UDim2.new(0, 85, 0, 100))
+local MusicAppIcon = createAppIcon("MÃºsica", "ðŸŽµ", Color3.fromRGB(0, 180, 255), UDim2.new(0, 5, 0, 0))
+local StopwatchAppIcon = createAppIcon("CronÃ´metro", "â±ï¸", Color3.fromRGB(255, 140, 30), UDim2.new(0, 85, 0, 0))
+local ConfigAppIcon = createAppIcon("Config", "âš™ï¸", Color3.fromRGB(120, 120, 130), UDim2.new(0, 165, 0, 0))
+local GalleryAppIcon = createAppIcon("Galeria", "ðŸ–¼ï¸", Color3.fromRGB(180, 80, 220), UDim2.new(0, 5, 0, 100))
+local CameraAppIcon = createAppIcon("CÃ¢mera", "ðŸ“·", Color3.fromRGB(255, 80, 80), UDim2.new(0, 85, 0, 100))
 
 local homeNavBtn, homeBackBtn = createNavBar(PhoneHome)
 
@@ -795,7 +901,7 @@ VolUpBtn.Name = "VolUp"
 VolUpBtn.Size = UDim2.new(1, -4, 0, 42)
 VolUpBtn.Position = UDim2.new(0, 2, 0, 3)
 VolUpBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-VolUpBtn.Text = "🔊"
+VolUpBtn.Text = "ðŸ”Š"
 VolUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolUpBtn.Font = Enum.Font.GothamBold
 VolUpBtn.TextSize = 13
@@ -812,7 +918,7 @@ VolDownBtn.Name = "VolDown"
 VolDownBtn.Size = UDim2.new(1, -4, 0, 42)
 VolDownBtn.Position = UDim2.new(0, 2, 0, 51)
 VolDownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-VolDownBtn.Text = "🔉"
+VolDownBtn.Text = "ðŸ”‰"
 VolDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolDownBtn.Font = Enum.Font.GothamBold
 VolDownBtn.TextSize = 13
@@ -826,7 +932,7 @@ volDownStroke.Parent = VolDownBtn
 
 VolUpBtn.MouseButton1Click:Connect(function()
     currentVolume = math.clamp(currentVolume + 0.1, 0, 1)
-    phoneConfig.volume = currentVolume
+    phoneSettings.volume = currentVolume
     saveConfig()
     if currentSound then
         currentSound.Volume = currentVolume
@@ -835,7 +941,7 @@ end)
 
 VolDownBtn.MouseButton1Click:Connect(function()
     currentVolume = math.clamp(currentVolume - 0.1, 0, 1)
-    phoneConfig.volume = currentVolume
+    phoneSettings.volume = currentVolume
     saveConfig()
     if currentSound then
         currentSound.Volume = currentVolume
@@ -857,7 +963,7 @@ MainFrame.Position = UDim2.new(1, -300, 0.5, -220)
 MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
-MainFrame.Draggable = false  -- FIXO
+MainFrame.Draggable = false -- FIXO
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
@@ -919,7 +1025,7 @@ local MusicTitle = Instance.new("TextLabel")
 MusicTitle.Size = UDim2.new(0, 120, 0, 28)
 MusicTitle.Position = UDim2.new(0, 16, 0.5, -14)
 MusicTitle.BackgroundTransparency = 1
-MusicTitle.Text = "Música"
+MusicTitle.Text = "MÃºsica"
 MusicTitle.TextColor3 = Color3.new(1, 1, 1)
 MusicTitle.Font = Enum.Font.GothamBold
 MusicTitle.TextSize = 18
@@ -957,7 +1063,7 @@ artStroke.Parent = AlbumArt
 local AlbumIcon = Instance.new("TextLabel")
 AlbumIcon.Size = UDim2.new(1, 0, 1, 0)
 AlbumIcon.BackgroundTransparency = 1
-AlbumIcon.Text = "🎵"
+AlbumIcon.Text = "ðŸŽµ"
 AlbumIcon.TextSize = 28
 AlbumIcon.Parent = AlbumArt
 
@@ -965,7 +1071,7 @@ local TrackName = Instance.new("TextLabel")
 TrackName.Size = UDim2.new(1, -90, 0, 24)
 TrackName.Position = UDim2.new(0, 82, 0, 18)
 TrackName.BackgroundTransparency = 1
-TrackName.Text = "Nenhuma música"
+TrackName.Text = "Nenhuma mÃºsica"
 TrackName.TextColor3 = Color3.new(1, 1, 1)
 TrackName.Font = Enum.Font.GothamBold
 TrackName.TextSize = 15
@@ -1046,19 +1152,19 @@ local function createBtn(text, pos, size)
     return btn
 end
 
-local ShuffleBtn = createBtn("🔀", UDim2.new(0, 0, 0.5, -18), UDim2.new(0, 42, 0, 36))
-local PrevBtn = createBtn("⏮", UDim2.new(0.22, -8, 0.5, -18), UDim2.new(0, 46, 0, 36))
-local PlayBtn = createBtn("▶", UDim2.new(0.5, -24, 0.5, -22), UDim2.new(0, 48, 0, 44))
+local ShuffleBtn = createBtn("ðŸ”€", UDim2.new(0, 0, 0.5, -18), UDim2.new(0, 42, 0, 36))
+local PrevBtn = createBtn("â®", UDim2.new(0.22, -8, 0.5, -18), UDim2.new(0, 46, 0, 36))
+local PlayBtn = createBtn("â–¶", UDim2.new(0.5, -24, 0.5, -22), UDim2.new(0, 48, 0, 44))
 PlayBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
 PlayBtn.TextColor3 = Color3.fromRGB(10, 10, 15)
-local NextBtn = createBtn("⏭", UDim2.new(0.78, -38, 0.5, -18), UDim2.new(0, 46, 0, 36))
-local RepeatBtn = createBtn("🔁", UDim2.new(1, -42, 0.5, -18), UDim2.new(0, 42, 0, 36))
+local NextBtn = createBtn("â­", UDim2.new(0.78, -38, 0.5, -18), UDim2.new(0, 46, 0, 36))
+local RepeatBtn = createBtn("ðŸ”", UDim2.new(1, -42, 0.5, -18), UDim2.new(0, 42, 0, 36))
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -24, 0, 32)
 SearchBox.Position = UDim2.new(0, 12, 0, 278)
 SearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-SearchBox.PlaceholderText = "🔍 Pesquisar música..."
+SearchBox.PlaceholderText = "ðŸ” Pesquisar mÃºsica..."
 SearchBox.Text = ""
 SearchBox.TextColor3 = Color3.new(1, 1, 1)
 SearchBox.Font = Enum.Font.Gotham
@@ -1121,7 +1227,7 @@ local function play(id, name, index)
     currentSound:Play()
     TrackName.Text = name
     TrackSub.Text = "Tocando agora"
-    PlayBtn.Text = "⏸"
+    PlayBtn.Text = "â¸"
     isPaused = false
 
     currentSound.Ended:Connect(function()
@@ -1164,7 +1270,7 @@ local function updateMusicList()
         local emptyLabel = Instance.new("TextLabel")
         emptyLabel.Size = UDim2.new(1, 0, 1, 0)
         emptyLabel.BackgroundTransparency = 1
-        emptyLabel.Text = searchText == "" and "📁 Coloque .mp3 em PHONE/Music" or "🔍 Nenhuma música encontrada"
+        emptyLabel.Text = searchText == "" and "ðŸ“ Coloque .mp3 em PHONE/Music" or "ðŸ” Nenhuma mÃºsica encontrada"
         emptyLabel.TextColor3 = Color3.fromRGB(130, 130, 150)
         emptyLabel.TextSize = 12
         emptyLabel.Parent = emptyFrame
@@ -1179,7 +1285,7 @@ local function updateMusicList()
             local t = Instance.new("TextButton")
             t.Size = UDim2.new(1, 0, 1, 0)
             t.BackgroundTransparency = 1
-            t.Text = "  🎵  " .. music.name
+            t.Text = "  ðŸŽµ  " .. music.name
             t.TextColor3 = Color3.new(1,1,1)
             t.TextXAlignment = Enum.TextXAlignment.Left
             t.TextSize = 13
@@ -1228,7 +1334,7 @@ local function refreshFiles()
     updateMusicList()
 end
 
--- ========== CRONÔMETRO (FIXO) ==========
+-- ========== CRONÃ”METRO (FIXO) ==========
 local StopwatchFrame = Instance.new("Frame")
 StopwatchFrame.Name = "StopwatchFrame"
 StopwatchFrame.Size = UDim2.new(0, 280, 0, 440)
@@ -1237,7 +1343,7 @@ StopwatchFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 StopwatchFrame.BorderSizePixel = 0
 StopwatchFrame.Visible = false
 StopwatchFrame.Active = true
-StopwatchFrame.Draggable = false
+StopwatchFrame.Draggable = false -- FIXO
 StopwatchFrame.Parent = ScreenGui
 
 Instance.new("UICorner", StopwatchFrame).CornerRadius = UDim.new(0, 28)
@@ -1268,7 +1374,7 @@ local swTitle = Instance.new("TextLabel")
 swTitle.Size = UDim2.new(1, 0, 0, 30)
 swTitle.Position = UDim2.new(0, 0, 0, 50)
 swTitle.BackgroundTransparency = 1
-swTitle.Text = "⏱️ Cronômetro"
+swTitle.Text = "â±ï¸ CronÃ´metro"
 swTitle.TextColor3 = Color3.new(1, 1, 1)
 swTitle.Font = Enum.Font.GothamBold
 swTitle.TextSize = 20
@@ -1289,7 +1395,7 @@ local swStartBtn = Instance.new("TextButton")
 swStartBtn.Size = UDim2.new(0, 100, 0, 50)
 swStartBtn.Position = UDim2.new(0.5, -110, 0, 230)
 swStartBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-swStartBtn.Text = "▶ Iniciar"
+swStartBtn.Text = "â–¶ Iniciar"
 swStartBtn.TextColor3 = Color3.new(0, 0, 0)
 swStartBtn.Font = Enum.Font.GothamBold
 swStartBtn.TextSize = 16
@@ -1300,7 +1406,7 @@ local swResetBtn = Instance.new("TextButton")
 swResetBtn.Size = UDim2.new(0, 100, 0, 50)
 swResetBtn.Position = UDim2.new(0.5, 10, 0, 230)
 swResetBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-swResetBtn.Text = "↺ Reset"
+swResetBtn.Text = "â†º Reset"
 swResetBtn.TextColor3 = Color3.new(1, 1, 1)
 swResetBtn.Font = Enum.Font.GothamBold
 swResetBtn.TextSize = 16
@@ -1336,13 +1442,13 @@ swStartBtn.MouseButton1Click:Connect(function()
     if swRunning then
         swElapsed = swElapsed + (os.clock() - swStartTime)
         swRunning = false
-        swStartBtn.Text = "▶ Iniciar"
+        swStartBtn.Text = "â–¶ Iniciar"
         swStartBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
         if swConnection then swConnection:Disconnect() swConnection = nil end
     else
         swStartTime = os.clock()
         swRunning = true
-        swStartBtn.Text = "⏸ Pausar"
+        swStartBtn.Text = "â¸ Pausar"
         swStartBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 30)
         if swConnection then swConnection:Disconnect() end
         swConnection = RunService.RenderStepped:Connect(updateStopwatchDisplay)
@@ -1354,7 +1460,7 @@ swResetBtn.MouseButton1Click:Connect(function()
     swElapsed = 0
     swStartTime = 0
     swTimeLabel.Text = "0:00:00:00.<font size=\"18\">00</font>"
-    swStartBtn.Text = "▶ Iniciar"
+    swStartBtn.Text = "â–¶ Iniciar"
     swStartBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
     if swConnection then swConnection:Disconnect() swConnection = nil end
 end)
@@ -1368,7 +1474,7 @@ ConfigFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 ConfigFrame.BorderSizePixel = 0
 ConfigFrame.Visible = false
 ConfigFrame.Active = true
-ConfigFrame.Draggable = false
+ConfigFrame.Draggable = false -- FIXO
 ConfigFrame.Parent = ScreenGui
 
 Instance.new("UICorner", ConfigFrame).CornerRadius = UDim.new(0, 28)
@@ -1391,7 +1497,7 @@ local cfgTitle = Instance.new("TextLabel")
 cfgTitle.Size = UDim2.new(1, 0, 0, 35)
 cfgTitle.Position = UDim2.new(0, 0, 0, 45)
 cfgTitle.BackgroundTransparency = 1
-cfgTitle.Text = "⚙️ Configurações"
+cfgTitle.Text = "âš™ï¸ ConfiguraÃ§Ãµes"
 cfgTitle.TextColor3 = Color3.new(1,1,1)
 cfgTitle.Font = Enum.Font.GothamBold
 cfgTitle.TextSize = 20
@@ -1455,24 +1561,21 @@ local function createConfigToggle(title, desc, default, callback)
         toggle.BackgroundColor3 = state and Color3.fromRGB(50, 205, 50) or Color3.fromRGB(60, 60, 65)
         toggle.Text = state and "ON" or "OFF"
         callback(state)
+        saveConfig()
     end)
 
     return frame
 end
 
-createConfigToggle("FPS Counter", "Mostra o FPS na tela inicial do celular", phoneConfig.fpsEnabled, function(on)
+createConfigToggle("FPS Counter", "Mostra o FPS na tela inicial do celular", phoneSettings.fpsEnabled, function(on)
     phoneSettings.fpsEnabled = on
-    phoneConfig.fpsEnabled = on
-    saveConfig()
     if fpsLabel then
         fpsLabel.Visible = on
     end
 end)
 
-createConfigToggle("Lanterna do Celular", "Liga uma luz fraca na frente do personagem", phoneConfig.flashlightEnabled, function(on)
+createConfigToggle("Lanterna do Celular", "Liga uma luz fraca na frente do personagem", phoneSettings.flashlightEnabled, function(on)
     phoneSettings.flashlightEnabled = on
-    phoneConfig.flashlightEnabled = on
-    saveConfig()
     if on then
         if phoneFlashlight then phoneFlashlight:Destroy() end
         local root = Character and Character:FindFirstChild("HumanoidRootPart")
@@ -1493,9 +1596,9 @@ createConfigToggle("Lanterna do Celular", "Liga uma luz fraca na frente do perso
     end
 end)
 
--- Wallpaper por ID
+-- Wallpaper custom
 local wallpaperFrame = Instance.new("Frame")
-wallpaperFrame.Size = UDim2.new(1, 0, 0, 110)
+wallpaperFrame.Size = UDim2.new(1, 0, 0, 140)
 wallpaperFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 wallpaperFrame.Parent = cfgScroll
 Instance.new("UICorner", wallpaperFrame).CornerRadius = UDim.new(0, 12)
@@ -1504,7 +1607,7 @@ local wpTitle = Instance.new("TextLabel")
 wpTitle.Size = UDim2.new(1, -20, 0, 25)
 wpTitle.Position = UDim2.new(0, 12, 0, 8)
 wpTitle.BackgroundTransparency = 1
-wpTitle.Text = "🖼️ Wallpaper (ID)"
+wpTitle.Text = "ðŸ–¼ï¸ Wallpaper"
 wpTitle.TextColor3 = Color3.new(1,1,1)
 wpTitle.Font = Enum.Font.GothamBold
 wpTitle.TextSize = 14
@@ -1513,69 +1616,131 @@ wpTitle.Parent = wallpaperFrame
 
 local wpInput = Instance.new("TextBox")
 wpInput.Size = UDim2.new(1, -24, 0, 32)
-wpInput.Position = UDim2.new(0, 12, 0, 38)
+wpInput.Position = UDim2.new(0, 12, 0, 40)
 wpInput.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-wpInput.PlaceholderText = "Cole o Asset ID aqui..."
+wpInput.PlaceholderText = "rbxassetid:// ou nome da foto"
 wpInput.Text = ""
-wpInput.TextColor3 = Color3.new(1, 1, 1)
+wpInput.TextColor3 = Color3.new(1,1,1)
 wpInput.Font = Enum.Font.Gotham
-wpInput.TextSize = 13
+wpInput.TextSize = 12
 wpInput.Parent = wallpaperFrame
 Instance.new("UICorner", wpInput).CornerRadius = UDim.new(0, 8)
 
 local wpApplyBtn = Instance.new("TextButton")
-wpApplyBtn.Size = UDim2.new(0, 100, 0, 28)
-wpApplyBtn.Position = UDim2.new(0, 12, 0, 76)
+wpApplyBtn.Size = UDim2.new(0, 100, 0, 30)
+wpApplyBtn.Position = UDim2.new(0, 12, 0, 82)
 wpApplyBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
 wpApplyBtn.Text = "Aplicar ID"
-wpApplyBtn.TextColor3 = Color3.new(0,0,0)
+wpApplyBtn.TextColor3 = Color3.fromRGB(10, 10, 15)
 wpApplyBtn.Font = Enum.Font.GothamBold
 wpApplyBtn.TextSize = 12
 wpApplyBtn.Parent = wallpaperFrame
 Instance.new("UICorner", wpApplyBtn).CornerRadius = UDim.new(0, 8)
 
+local wpFromGalleryBtn = Instance.new("TextButton")
+wpFromGalleryBtn.Size = UDim2.new(0, 120, 0, 30)
+wpFromGalleryBtn.Position = UDim2.new(0, 120, 0, 82)
+wpFromGalleryBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+wpFromGalleryBtn.Text = "Da Galeria"
+wpFromGalleryBtn.TextColor3 = Color3.new(1,1,1)
+wpFromGalleryBtn.Font = Enum.Font.GothamBold
+wpFromGalleryBtn.TextSize = 12
+wpFromGalleryBtn.Parent = wallpaperFrame
+Instance.new("UICorner", wpFromGalleryBtn).CornerRadius = UDim.new(0, 8)
+
+local function applyWallpaper(img)
+    if not img or img == "" then return end
+    phoneSettings.wallpaper = img
+    homeBg.Image = img
+    saveConfig()
+end
+
 wpApplyBtn.MouseButton1Click:Connect(function()
-    local id = wpInput.Text:gsub("%D", "")
-    if id ~= "" then
-        local fullId = "rbxassetid://" .. id
-        homeBg.Image = fullId
-        phoneConfig.wallpaperId = fullId
-        phoneConfig.wallpaperFromPhotos = false
-        phoneConfig.wallpaperPhotoPath = ""
-        saveConfig()
-        wpInput.Text = ""
+    local txt = wpInput.Text:gsub("%s+", "")
+    if txt == "" then return end
+    if not txt:find("rbxassetid://") and not txt:find("http") then
+        -- tenta como ID numÃ©rico
+        if tonumber(txt) then
+            txt = "rbxassetid://" .. txt
+        end
     end
+    applyWallpaper(txt)
+    wpInput.Text = ""
 end)
 
--- Wallpaper da Galeria
-local wpGalleryFrame = Instance.new("Frame")
-wpGalleryFrame.Size = UDim2.new(1, 0, 0, 70)
-wpGalleryFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-wpGalleryFrame.Parent = cfgScroll
-Instance.new("UICorner", wpGalleryFrame).CornerRadius = UDim.new(0, 12)
+-- Galeria picker para wallpaper (abre lista simples)
+local wpGalleryPicker = Instance.new("Frame")
+wpGalleryPicker.Size = UDim2.new(1, -24, 0, 180)
+wpGalleryPicker.Position = UDim2.new(0, 12, 0, 120)
+wpGalleryPicker.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+wpGalleryPicker.Visible = false
+wpGalleryPicker.Parent = wallpaperFrame
+Instance.new("UICorner", wpGalleryPicker).CornerRadius = UDim.new(0, 10)
 
-local wpGalTitle = Instance.new("TextLabel")
-wpGalTitle.Size = UDim2.new(1, -20, 0, 25)
-wpGalTitle.Position = UDim2.new(0, 12, 0, 8)
-wpGalTitle.BackgroundTransparency = 1
-wpGalTitle.Text = "🖼️ Usar foto da Galeria"
-wpGalTitle.TextColor3 = Color3.new(1,1,1)
-wpGalTitle.Font = Enum.Font.GothamBold
-wpGalTitle.TextSize = 14
-wpGalTitle.TextXAlignment = Enum.TextXAlignment.Left
-wpGalTitle.Parent = wpGalleryFrame
+local wpGalScroll = Instance.new("ScrollingFrame")
+wpGalScroll.Size = UDim2.new(1, -10, 1, -10)
+wpGalScroll.Position = UDim2.new(0, 5, 0, 5)
+wpGalScroll.BackgroundTransparency = 1
+wpGalScroll.ScrollBarThickness = 3
+wpGalScroll.Parent = wpGalleryPicker
 
-local wpGalDesc = Instance.new("TextLabel")
-wpGalDesc.Size = UDim2.new(1, -20, 0, 30)
-wpGalDesc.Position = UDim2.new(0, 12, 0, 32)
-wpGalDesc.BackgroundTransparency = 1
-wpGalDesc.Text = "Abra a Galeria e use o botão 'Definir Wallpaper'"
-wpGalDesc.TextColor3 = Color3.fromRGB(160, 160, 170)
-wpGalDesc.Font = Enum.Font.Gotham
-wpGalDesc.TextSize = 11
-wpGalDesc.TextXAlignment = Enum.TextXAlignment.Left
-wpGalDesc.TextWrapped = true
-wpGalDesc.Parent = wpGalleryFrame
+local wpGalLayout = Instance.new("UIListLayout")
+wpGalLayout.Padding = UDim.new(0, 4)
+wpGalLayout.Parent = wpGalScroll
+
+wpFromGalleryBtn.MouseButton1Click:Connect(function()
+    wpGalleryPicker.Visible = not wpGalleryPicker.Visible
+    if wpGalleryPicker.Visible then
+        -- limpa e popula
+        for _, c in pairs(wpGalScroll:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        -- usa photoList se disponÃ­vel
+        pcall(function()
+            local paths = {"PHONE/Photos/", "PHONE/Photos"}
+            local files
+            for _, p in ipairs(paths) do
+                local ok, f = pcall(listfiles, p)
+                if ok and type(f) == "table" and #f > 0 then
+                    files = f
+                    break
+                end
+            end
+            if files then
+                for _, file in ipairs(files) do
+                    local str = tostring(file)
+                    local lower = str:lower()
+                    if lower:match("%.png$") or lower:match("%.jpg$") or lower:match("%.jpeg$") or lower:match("%.webp$") then
+                        local name = str:match("([^/\\]+)$") or str
+                        local btn = Instance.new("TextButton")
+                        btn.Size = UDim2.new(1, 0, 0, 28)
+                        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+                        btn.Text = "  " .. name
+                        btn.TextColor3 = Color3.new(1,1,1)
+                        btn.TextXAlignment = Enum.TextXAlignment.Left
+                        btn.TextSize = 11
+                        btn.Font = Enum.Font.Gotham
+                        btn.Parent = wpGalScroll
+                        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+                        btn.MouseButton1Click:Connect(function()
+                            local ok, asset = pcall(getcustomasset, file)
+                            if ok and asset then
+                                applyWallpaper(asset)
+                                wpGalleryPicker.Visible = false
+                            end
+                        end)
+                    end
+                end
+                wpGalScroll.CanvasSize = UDim2.new(0, 0, 0, wpGalLayout.AbsoluteContentSize.Y + 10)
+            end
+        end)
+        -- aumenta altura do frame de wallpaper
+        wallpaperFrame.Size = UDim2.new(1, 0, 0, 320)
+    else
+        wallpaperFrame.Size = UDim2.new(1, 0, 0, 140)
+    end
+    cfgScroll.CanvasSize = UDim2.new(0, 0, 0, cfgLayout.AbsoluteContentSize.Y + 20)
+end)
 
 local serverInfoFrame = Instance.new("Frame")
 serverInfoFrame.Size = UDim2.new(1, 0, 0, 110)
@@ -1587,7 +1752,7 @@ local serverTitle = Instance.new("TextLabel")
 serverTitle.Size = UDim2.new(1, -20, 0, 25)
 serverTitle.Position = UDim2.new(0, 12, 0, 8)
 serverTitle.BackgroundTransparency = 1
-serverTitle.Text = "📡 Info do Servidor"
+serverTitle.Text = "ðŸ“¡ Info do Servidor"
 serverTitle.TextColor3 = Color3.new(1,1,1)
 serverTitle.Font = Enum.Font.GothamBold
 serverTitle.TextSize = 14
@@ -1619,7 +1784,7 @@ task.spawn(function()
             ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
         end)
 
-        local serverType = (game.JobId ~= "" and game.PrivateServerId ~= "") and "Privado" or "Público"
+        local serverType = (game.JobId ~= "" and game.PrivateServerId ~= "") and "Privado" or "PÃºblico"
 
         serverInfoLabel.Text = string.format(
             "Players: %d / %d\nTempo Online: %02d:%02d\nPing: %d ms\nServer: %s",
@@ -1645,7 +1810,7 @@ GalleryFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
 GalleryFrame.BorderSizePixel = 0
 GalleryFrame.Visible = false
 GalleryFrame.Active = true
-GalleryFrame.Draggable = false
+GalleryFrame.Draggable = false -- FIXO
 GalleryFrame.Parent = ScreenGui
 
 Instance.new("UICorner", GalleryFrame).CornerRadius = UDim.new(0, 28)
@@ -1676,7 +1841,7 @@ local galTitle = Instance.new("TextLabel")
 galTitle.Size = UDim2.new(1, 0, 0, 30)
 galTitle.Position = UDim2.new(0, 0, 0, 42)
 galTitle.BackgroundTransparency = 1
-galTitle.Text = "🖼️ Galeria"
+galTitle.Text = "ðŸ–¼ï¸ Galeria"
 galTitle.TextColor3 = Color3.new(1, 1, 1)
 galTitle.Font = Enum.Font.GothamBold
 galTitle.TextSize = 20
@@ -1686,7 +1851,7 @@ local PhotoSearchBox = Instance.new("TextBox")
 PhotoSearchBox.Size = UDim2.new(1, -24, 0, 32)
 PhotoSearchBox.Position = UDim2.new(0, 12, 0, 80)
 PhotoSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-PhotoSearchBox.PlaceholderText = "🔍 Pesquisar foto..."
+PhotoSearchBox.PlaceholderText = "ðŸ” Pesquisar foto..."
 PhotoSearchBox.Text = ""
 PhotoSearchBox.TextColor3 = Color3.new(1, 1, 1)
 PhotoSearchBox.Font = Enum.Font.Gotham
@@ -1727,7 +1892,7 @@ Instance.new("UICorner", PhotoViewerView).CornerRadius = UDim.new(0, 28)
 
 local PhotoDisplay = Instance.new("ImageLabel")
 PhotoDisplay.Name = "PhotoDisplay"
-PhotoDisplay.Size = UDim2.new(1, -16, 1, -140)
+PhotoDisplay.Size = UDim2.new(1, -16, 1, -110)
 PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 PhotoDisplay.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
 PhotoDisplay.BackgroundTransparency = 0.3
@@ -1736,9 +1901,69 @@ PhotoDisplay.ScaleType = Enum.ScaleType.Fit
 PhotoDisplay.Parent = PhotoViewerView
 Instance.new("UICorner", PhotoDisplay).CornerRadius = UDim.new(0, 12)
 
+-- Zoom com pinÃ§a (mobile) + scroll (PC)
+local currentZoom = 1
+local minZoom = 1
+local maxZoom = 4
+local pinchStartDist = 0
+local pinchStartZoom = 1
+local activeTouches = {}
+
+local function updateZoom()
+    PhotoDisplay.Size = UDim2.new(currentZoom, -16 * currentZoom, currentZoom, -110 * currentZoom)
+    PhotoDisplay.Position = UDim2.new(0.5 - currentZoom/2, 8 * currentZoom, 0.5 - currentZoom/2 + 0.05, 40)
+end
+
+UserInputService.TouchStarted:Connect(function(touch, processed)
+    if not isInPhotoViewer then return end
+    activeTouches[touch] = touch.Position
+    if #activeTouches >= 2 then
+        local positions = {}
+        for _, pos in pairs(activeTouches) do
+            table.insert(positions, pos)
+        end
+        if #positions >= 2 then
+            pinchStartDist = (positions[1] - positions[2]).Magnitude
+            pinchStartZoom = currentZoom
+        end
+    end
+end)
+
+UserInputService.TouchMoved:Connect(function(touch, processed)
+    if not isInPhotoViewer then return end
+    activeTouches[touch] = touch.Position
+    local positions = {}
+    for _, pos in pairs(activeTouches) do
+        table.insert(positions, pos)
+    end
+    if #positions >= 2 and pinchStartDist > 0 then
+        local dist = (positions[1] - positions[2]).Magnitude
+        local scale = dist / pinchStartDist
+        currentZoom = math.clamp(pinchStartZoom * scale, minZoom, maxZoom)
+        updateZoom()
+    end
+end)
+
+UserInputService.TouchEnded:Connect(function(touch, processed)
+    activeTouches[touch] = nil
+    if #activeTouches < 2 then
+        pinchStartDist = 0
+    end
+end)
+
+-- Zoom com scroll do mouse (PC)
+UserInputService.InputChanged:Connect(function(input)
+    if not isInPhotoViewer then return end
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        local delta = input.Position.Z
+        currentZoom = math.clamp(currentZoom + delta * 0.15, minZoom, maxZoom)
+        updateZoom()
+    end
+end)
+
 local PhotoNameLabel = Instance.new("TextLabel")
 PhotoNameLabel.Size = UDim2.new(1, -20, 0, 24)
-PhotoNameLabel.Position = UDim2.new(0, 10, 1, -120)
+PhotoNameLabel.Position = UDim2.new(0, 10, 1, -95)
 PhotoNameLabel.BackgroundTransparency = 1
 PhotoNameLabel.Text = ""
 PhotoNameLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -1748,76 +1973,48 @@ PhotoNameLabel.TextXAlignment = Enum.TextXAlignment.Center
 PhotoNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 PhotoNameLabel.Parent = PhotoViewerView
 
+-- BotÃµes de navegaÃ§Ã£o da galeria (anterior / prÃ³xima)
 local prevPhotoBtn = Instance.new("TextButton")
 prevPhotoBtn.Name = "PrevPhoto"
-prevPhotoBtn.Size = UDim2.new(0, 70, 0, 32)
-prevPhotoBtn.Position = UDim2.new(0, 15, 1, -85)
+prevPhotoBtn.Size = UDim2.new(0, 70, 0, 36)
+prevPhotoBtn.Position = UDim2.new(0, 20, 1, -55)
 prevPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-prevPhotoBtn.Text = "◀ Anterior"
+prevPhotoBtn.Text = "â—€ Anterior"
 prevPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 prevPhotoBtn.Font = Enum.Font.GothamBold
-prevPhotoBtn.TextSize = 12
+prevPhotoBtn.TextSize = 13
 prevPhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", prevPhotoBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", prevPhotoBtn).CornerRadius = UDim.new(0, 10)
 
 local nextPhotoBtn = Instance.new("TextButton")
 nextPhotoBtn.Name = "NextPhoto"
-nextPhotoBtn.Size = UDim2.new(0, 70, 0, 32)
-nextPhotoBtn.Position = UDim2.new(1, -85, 1, -85)
+nextPhotoBtn.Size = UDim2.new(0, 70, 0, 36)
+nextPhotoBtn.Position = UDim2.new(1, -90, 1, -55)
 nextPhotoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-nextPhotoBtn.Text = "Próxima ▶"
+nextPhotoBtn.Text = "PrÃ³xima â–¶"
 nextPhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 nextPhotoBtn.Font = Enum.Font.GothamBold
-nextPhotoBtn.TextSize = 12
+nextPhotoBtn.TextSize = 13
 nextPhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", nextPhotoBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", nextPhotoBtn).CornerRadius = UDim.new(0, 10)
 
-local slideshowBtn = Instance.new("TextButton")
-slideshowBtn.Name = "SlideshowBtn"
-slideshowBtn.Size = UDim2.new(0, 70, 0, 32)
-slideshowBtn.Position = UDim2.new(0.5, -35, 1, -85)
-slideshowBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-slideshowBtn.Text = "▶ Slideshow"
-slideshowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-slideshowBtn.Font = Enum.Font.GothamBold
-slideshowBtn.TextSize = 11
-slideshowBtn.Parent = PhotoViewerView
-Instance.new("UICorner", slideshowBtn).CornerRadius = UDim.new(0, 8)
-
+-- BotÃ£o de excluir foto
 local deletePhotoBtn = Instance.new("TextButton")
 deletePhotoBtn.Name = "DeletePhoto"
-deletePhotoBtn.Size = UDim2.new(0, 70, 0, 28)
-deletePhotoBtn.Position = UDim2.new(0, 15, 1, -48)
-deletePhotoBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-deletePhotoBtn.Text = "🗑️ Excluir"
+deletePhotoBtn.Size = UDim2.new(0, 70, 0, 36)
+deletePhotoBtn.Position = UDim2.new(0.5, -35, 1, -55)
+deletePhotoBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+deletePhotoBtn.Text = "ðŸ—‘ï¸ Excluir"
 deletePhotoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 deletePhotoBtn.Font = Enum.Font.GothamBold
 deletePhotoBtn.TextSize = 12
 deletePhotoBtn.Parent = PhotoViewerView
-Instance.new("UICorner", deletePhotoBtn).CornerRadius = UDim.new(0, 8)
-
-local setWallpaperBtn = Instance.new("TextButton")
-setWallpaperBtn.Name = "SetWallpaper"
-setWallpaperBtn.Size = UDim2.new(0, 110, 0, 28)
-setWallpaperBtn.Position = UDim2.new(1, -125, 1, -48)
-setWallpaperBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-setWallpaperBtn.Text = "Definir Wallpaper"
-setWallpaperBtn.TextColor3 = Color3.new(0,0,0)
-setWallpaperBtn.Font = Enum.Font.GothamBold
-setWallpaperBtn.TextSize = 11
-setWallpaperBtn.Parent = PhotoViewerView
-Instance.new("UICorner", setWallpaperBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", deletePhotoBtn).CornerRadius = UDim.new(0, 10)
 
 local galNavBtn, galBackBtn = createNavBar(GalleryFrame)
 
 local function exitPhotoViewer()
     isInPhotoViewer = false
-    isSlideshow = false
-    if slideshowConnection then
-        slideshowConnection:Disconnect()
-        slideshowConnection = nil
-    end
-    slideshowBtn.Text = "▶ Slideshow"
     PhotoViewerView.Visible = false
     PhotoScrollList.Visible = true
     PhotoSearchBox.Visible = true
@@ -1826,7 +2023,7 @@ local function exitPhotoViewer()
     PhotoNameLabel.Text = ""
     currentPhotoIndex = 0
     currentZoom = 1
-    PhotoDisplay.Size = UDim2.new(1, -16, 1, -140)
+    updateZoom()
 end
 
 local function openPhotoByIndex(idx)
@@ -1834,6 +2031,8 @@ local function openPhotoByIndex(idx)
     if idx < 1 then idx = #filteredPhotoList end
     if idx > #filteredPhotoList then idx = 1 end
     currentPhotoIndex = idx
+    currentZoom = 1
+    updateZoom()
 
     local photo = filteredPhotoList[idx]
     isInPhotoViewer = true
@@ -1851,8 +2050,6 @@ local function openPhotoByIndex(idx)
     if success and asset then
         PhotoDisplay.Image = asset
         PhotoDisplay.ScaleType = Enum.ScaleType.Fit
-        currentZoom = 1
-        PhotoDisplay.Size = UDim2.new(1, -16, 1, -140)
     else
         PhotoNameLabel.Text = "Erro ao carregar foto"
         PhotoDisplay.Image = ""
@@ -1882,35 +2079,19 @@ nextPhotoBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-slideshowBtn.MouseButton1Click:Connect(function()
-    if not isSlideshow then
-        isSlideshow = true
-        slideshowBtn.Text = "⏸ Parar"
-        if slideshowConnection then slideshowConnection:Disconnect() end
-        slideshowConnection = task.spawn(function()
-            while isSlideshow and isInPhotoViewer do
-                task.wait(2.5)
-                if isSlideshow and isInPhotoViewer then
-                    openPhotoByIndex(currentPhotoIndex + 1)
-                end
-            end
-        end)
-    else
-        isSlideshow = false
-        slideshowBtn.Text = "▶ Slideshow"
-        if slideshowConnection then
-            -- task.spawn não tem Disconnect, apenas para o loop
-        end
-    end
-end)
-
 deletePhotoBtn.MouseButton1Click:Connect(function()
     if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
     local photo = filteredPhotoList[currentPhotoIndex]
-    if photo and photo.path then
-        pcall(function()
+    if not photo then return end
+
+    -- Confirma visualmente
+    deletePhotoBtn.Text = "..."
+    local ok = pcall(function()
+        if isfile(photo.path) then
             delfile(photo.path)
-        end)
+        end
+    end)
+    if ok then
         -- remove da lista
         for i, p in ipairs(photoList) do
             if p.path == photo.path then
@@ -1918,70 +2099,25 @@ deletePhotoBtn.MouseButton1Click:Connect(function()
                 break
             end
         end
-        exitPhotoViewer()
-        -- atualiza lista
-        task.wait(0.1)
-        -- chama refresh depois
-    end
-end)
-
-setWallpaperBtn.MouseButton1Click:Connect(function()
-    if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
-    local photo = filteredPhotoList[currentPhotoIndex]
-    if photo and photo.path then
-        pcall(function()
-            local asset = getcustomasset(photo.path)
-            if asset then
-                homeBg.Image = asset
-                phoneConfig.wallpaperFromPhotos = true
-                phoneConfig.wallpaperPhotoPath = photo.path
-                phoneConfig.wallpaperId = ""
-                saveConfig()
-            end
-        end)
-    end
-end)
-
--- Zoom com pinça (mobile)
-if isTouchDevice then
-    local touches = {}
-    UserInputService.TouchStarted:Connect(function(touch, processed)
-        if not isInPhotoViewer or not PhotoViewerView.Visible then return end
-        table.insert(touches, touch)
-        if #touches == 2 then
-            local pos1 = touches[1].Position
-            local pos2 = touches[2].Position
-            pinchStartDistance = (pos1 - pos2).Magnitude
-        end
-    end)
-
-    UserInputService.TouchMoved:Connect(function(touch, processed)
-        if not isInPhotoViewer or #touches < 2 then return end
-        local pos1, pos2
-        for _, t in ipairs(touches) do
-            if t == touches[1] then pos1 = t.Position end
-            if t == touches[2] then pos2 = t.Position end
-        end
-        if pos1 and pos2 then
-            local dist = (pos1 - pos2).Magnitude
-            local scale = dist / math.max(pinchStartDistance, 1)
-            currentZoom = math.clamp(scale, 0.5, 3)
-            PhotoDisplay.Size = UDim2.new(currentZoom, -16 * currentZoom, currentZoom, -140 * currentZoom)
-        end
-    end)
-
-    UserInputService.TouchEnded:Connect(function(touch, processed)
-        for i, t in ipairs(touches) do
-            if t == touch then
-                table.remove(touches, i)
+        for i, p in ipairs(filteredPhotoList) do
+            if p.path == photo.path then
+                table.remove(filteredPhotoList, i)
                 break
             end
         end
-        if #touches < 2 then
-            pinchStartDistance = 0
+        if #filteredPhotoList == 0 then
+            exitPhotoViewer()
+            updatePhotoList()
+        else
+            if currentPhotoIndex > #filteredPhotoList then
+                currentPhotoIndex = #filteredPhotoList
+            end
+            openPhotoByIndex(currentPhotoIndex)
+            updatePhotoList()
         end
-    end)
-end
+    end
+    deletePhotoBtn.Text = "ðŸ—‘ï¸ Excluir"
+end)
 
 local function updatePhotoList()
     for _, v in pairs(PhotoScrollList:GetChildren()) do
@@ -2007,7 +2143,7 @@ local function updatePhotoList()
         local emptyLabel = Instance.new("TextLabel")
         emptyLabel.Size = UDim2.new(1, 0, 1, 0)
         emptyLabel.BackgroundTransparency = 1
-        emptyLabel.Text = searchText == "" and "📁 Coloque fotos em PHONE/Photos" or "🔍 Nenhuma foto encontrada"
+        emptyLabel.Text = searchText == "" and "ðŸ“ Coloque fotos em PHONE/Photos" or "ðŸ” Nenhuma foto encontrada"
         emptyLabel.TextColor3 = Color3.fromRGB(130, 130, 150)
         emptyLabel.TextSize = 12
         emptyLabel.Parent = emptyFrame
@@ -2073,7 +2209,7 @@ local function refreshPhotos()
         for _, file in ipairs(files) do
             local str = tostring(file)
             local lower = str:lower()
-            if lower:match("%.png\( ") or lower:match("%.jpg \)") or lower:match("%.jpeg\( ") or lower:match("%.webp \)") or lower:match("%.bmp\( ") or lower:match("%.gif \)") then
+            if lower:match("%.png$") or lower:match("%.jpg$") or lower:match("%.jpeg$") or lower:match("%.webp$") or lower:match("%.bmp$") or lower:match("%.gif$") then
                 local name = str:match("([^/\\]+)$") or str
                 name = name:gsub("%.%w+$", "")
                 table.insert(photoList, {name = name, path = file})
@@ -2089,16 +2225,16 @@ PhotoSearchBox.Changed:Connect(function(prop)
     end
 end)
 
--- ========== CÂMERA APP ==========
+-- ========== CÃ‚MERA APP (NOVO) ==========
 local CameraFrame = Instance.new("Frame")
 CameraFrame.Name = "CameraFrame"
 CameraFrame.Size = UDim2.new(0, 280, 0, 440)
 CameraFrame.Position = UDim2.new(1, -300, 0.5, -220)
-CameraFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+CameraFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
 CameraFrame.BorderSizePixel = 0
 CameraFrame.Visible = false
 CameraFrame.Active = true
-CameraFrame.Draggable = false
+CameraFrame.Draggable = false -- FIXO
 CameraFrame.Parent = ScreenGui
 
 Instance.new("UICorner", CameraFrame).CornerRadius = UDim.new(0, 28)
@@ -2114,21 +2250,29 @@ camEars.Position = UDim2.new(0.5, -170, 0, -48)
 camEars.BackgroundTransparency = 1
 camEars.Image = "rbxassetid://108135642658853"
 camEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
-camEars.ZIndex = 10
+camEars.ZIndex = CameraFrame.ZIndex + 2
 camEars.Parent = CameraFrame
+
+local camNotch = Instance.new("Frame")
+camNotch.Size = UDim2.new(0, 82, 0, 24)
+camNotch.Position = UDim2.new(0.5, -41, 0, 9)
+camNotch.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+camNotch.BorderSizePixel = 0
+camNotch.Parent = CameraFrame
+Instance.new("UICorner", camNotch).CornerRadius = UDim.new(1, 0)
 
 local camTitle = Instance.new("TextLabel")
 camTitle.Size = UDim2.new(1, 0, 0, 30)
-camTitle.Position = UDim2.new(0, 0, 0, 50)
+camTitle.Position = UDim2.new(0, 0, 0, 45)
 camTitle.BackgroundTransparency = 1
-camTitle.Text = "📷 Câmera"
+camTitle.Text = "ðŸ“· CÃ¢mera"
 camTitle.TextColor3 = Color3.new(1, 1, 1)
 camTitle.Font = Enum.Font.GothamBold
 camTitle.TextSize = 20
 camTitle.Parent = CameraFrame
 
 local camPreview = Instance.new("Frame")
-camPreview.Size = UDim2.new(1, -40, 0, 260)
+camPreview.Size = UDim2.new(1, -40, 0, 220)
 camPreview.Position = UDim2.new(0, 20, 0, 90)
 camPreview.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 camPreview.BorderSizePixel = 0
@@ -2138,72 +2282,184 @@ Instance.new("UICorner", camPreview).CornerRadius = UDim.new(0, 16)
 local camPreviewLabel = Instance.new("TextLabel")
 camPreviewLabel.Size = UDim2.new(1, 0, 1, 0)
 camPreviewLabel.BackgroundTransparency = 1
-camPreviewLabel.Text = "Pronto para capturar"
-camPreviewLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+camPreviewLabel.Text = "Aponte a cÃ¢mera\ne tire a foto"
+camPreviewLabel.TextColor3 = Color3.fromRGB(140, 140, 160)
 camPreviewLabel.Font = Enum.Font.Gotham
-camPreviewLabel.TextSize = 14
+camPreviewLabel.TextSize = 16
+camPreviewLabel.TextWrapped = true
 camPreviewLabel.Parent = camPreview
 
-local captureBtn = Instance.new("TextButton")
-captureBtn.Size = UDim2.new(0, 80, 0, 80)
-captureBtn.Position = UDim2.new(0.5, -40, 0, 370)
-captureBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-captureBtn.Text = ""
-captureBtn.Parent = CameraFrame
-Instance.new("UICorner", captureBtn).CornerRadius = UDim.new(1, 0)
+local takePhotoBtn = Instance.new("TextButton")
+takePhotoBtn.Size = UDim2.new(0, 80, 0, 80)
+takePhotoBtn.Position = UDim2.new(0.5, -40, 0, 330)
+takePhotoBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+takePhotoBtn.Text = ""
+takePhotoBtn.Parent = CameraFrame
+Instance.new("UICorner", takePhotoBtn).CornerRadius = UDim.new(1, 0)
 
-local captureInner = Instance.new("Frame")
-captureInner.Size = UDim2.new(0, 64, 0, 64)
-captureInner.Position = UDim2.new(0.5, -32, 0.5, -32)
-captureInner.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-captureInner.Parent = captureBtn
-Instance.new("UICorner", captureInner).CornerRadius = UDim.new(1, 0)
+local takePhotoInner = Instance.new("Frame")
+takePhotoInner.Size = UDim2.new(0, 64, 0, 64)
+takePhotoInner.Position = UDim2.new(0.5, -32, 0.5, -32)
+takePhotoInner.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+takePhotoInner.BorderSizePixel = 0
+takePhotoInner.Parent = takePhotoBtn
+Instance.new("UICorner", takePhotoInner).CornerRadius = UDim.new(1, 0)
 
-local camStatus = Instance.new("TextLabel")
-camStatus.Size = UDim2.new(1, -20, 0, 20)
-camStatus.Position = UDim2.new(0, 10, 0, 360)
-camStatus.BackgroundTransparency = 1
-camStatus.Text = ""
-camStatus.TextColor3 = Color3.fromRGB(50, 205, 50)
-camStatus.Font = Enum.Font.Gotham
-camStatus.TextSize = 12
-camStatus.Parent = CameraFrame
+local camStatusLabel = Instance.new("TextLabel")
+camStatusLabel.Size = UDim2.new(1, -20, 0, 24)
+camStatusLabel.Position = UDim2.new(0, 10, 0, 300)
+camStatusLabel.BackgroundTransparency = 1
+camStatusLabel.Text = ""
+camStatusLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
+camStatusLabel.Font = Enum.Font.Gotham
+camStatusLabel.TextSize = 13
+camStatusLabel.Parent = CameraFrame
 
 local camNavBtn, camBackBtn = createNavBar(CameraFrame)
 
-captureBtn.MouseButton1Click:Connect(function()
-    camStatus.Text = "Capturando..."
-    captureInner.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    
+local isCapturing = false
+
+takePhotoBtn.MouseButton1Click:Connect(function()
+    if isCapturing then return end
+    isCapturing = true
+    camStatusLabel.Text = "Capturando..."
+    takePhotoInner.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+
+    -- Flash visual
+    local flash = Instance.new("Frame")
+    flash.Size = UDim2.new(1, 0, 1, 0)
+    flash.BackgroundColor3 = Color3.new(1, 1, 1)
+    flash.BackgroundTransparency = 0
+    flash.BorderSizePixel = 0
+    flash.ZIndex = 100
+    flash.Parent = CameraFrame
+    Instance.new("UICorner", flash).CornerRadius = UDim.new(0, 28)
+    TweenService:Create(flash, TweenInfo.new(0.35), {BackgroundTransparency = 1}):Play()
+    task.delay(0.4, function()
+        if flash and flash.Parent then flash:Destroy() end
+    end)
+
     task.spawn(function()
-        local timestamp = os.date("%Y%m%d_%H%M%S")
-        local fileName = "PHONE/Photos/foto_" .. timestamp .. ".png"
-        
-        -- Tenta capturar (alguns executors têm funções específicas)
         local success = false
-        pcall(function()
-            -- Fallback: cria um arquivo de marcação (muitos executors não têm screenshot nativo)
-            -- Em executors com suporte real, substitua por a função correta
-            writefile(fileName, "Foto capturada em " .. os.date("%d/%m/%Y %H:%M:%S"))
-            success = true
+        local filename = "PHONE/Photos/foto_" .. os.date("%Y%m%d_%H%M%S") .. ".png"
+
+        -- Tenta CaptureService se disponÃ­vel
+        local ok, err = pcall(function()
+            if CaptureService and CaptureService.CaptureScreenshot then
+                CaptureService:CaptureScreenshot(function(contentId)
+                    -- contentId Ã© um rbxassetid temporÃ¡rio; alguns executors permitem salvar
+                    pcall(function()
+                        -- Fallback: usa request se disponÃ­vel para baixar, senÃ£o apenas notifica
+                        if writefile then
+                            -- Muitos executors nÃ£o expÃµem o bytes do CaptureService diretamente.
+                            -- Alternativa: salva um placeholder e usa getcustomasset depois se possÃ­vel.
+                            -- Aqui tentamos o mÃ©todo mais comum em executors:
+                            if typeof(contentId) == "string" and contentId:find("rbxassetid") then
+                                -- nÃ£o temos bytes; apenas registra
+                            end
+                        end
+                    end)
+                end)
+            end
         end)
-        
+
+        -- MÃ©todo alternativo usado por muitos scripts de screenshot em exploit:
+        -- Usa a API do executor se existir (alguns tÃªm screenshot())
+        pcall(function()
+            if screenshot then
+                local data = screenshot()
+                if data and writefile then
+                    writefile(filename, data)
+                    success = true
+                end
+            end
+        end)
+
+        -- Outro fallback comum
+        pcall(function()
+            if syn and syn.request then
+                -- nÃ£o aplicÃ¡vel diretamente
+            end
+        end)
+
+        -- MÃ©todo genÃ©rico: alguns executors tÃªm game:GetService("CoreGui") screenshot helpers
+        -- Ãšltimo recurso: cria um arquivo de marcaÃ§Ã£o + tenta getcustomasset depois
+        if not success then
+            pcall(function()
+                -- Tenta o mÃ©todo do Fluxus / Synapse / Wave / etc via request interno
+                if request or http_request or (syn and syn.request) then
+                    -- nÃ£o gera bytes reais sem API
+                end
+                -- Cria um arquivo vazio apenas para indicar que tentou (melhor UX)
+                -- Na prÃ¡tica a maioria dos executores modernos expÃµe uma funÃ§Ã£o de screenshot
+                if writefile and not isfile(filename) then
+                    -- NÃ£o escreve lixo; apenas falha graciosamente
+                end
+            end)
+        end
+
+        -- MÃ©todo mais confiÃ¡vel em 2025+ em vÃ¡rios executors: 
+        -- Usar o CaptureService + esperar o contentId e depois usar um download se possÃ­vel.
+        -- Como fallback final usamos um aviso e salvamos timestamp.
+        task.wait(0.6)
+
         if success then
-            camStatus.Text = "Foto salva em Photos!"
-            camPreviewLabel.Text = "✓ Foto salva\n" .. timestamp
+            camStatusLabel.Text = "âœ… Salva em PHONE/Photos"
+            camStatusLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
             refreshPhotos()
         else
-            camStatus.Text = "Erro ao salvar"
+            -- Tenta o mÃ©todo do Roblox CaptureService + writefile via content
+            local finalOk = false
+            pcall(function()
+                if CaptureService then
+                    CaptureService:CaptureScreenshot(function(content)
+                        -- Em alguns ambientes content jÃ¡ Ã© o asset utilizÃ¡vel
+                        if content and writefile then
+                            -- NÃ£o temos bytes crus; mas podemos registrar o asset
+                            -- e a galeria pode tentar carregar depois se o executor permitir.
+                            -- Alternativa prÃ¡tica: avisar o usuÃ¡rio e manter o fluxo.
+                        end
+                    end)
+                end
+            end)
+
+            -- Fallback final mais usado em scripts de phone: 
+            -- usa a funÃ§Ã£o global se o executor injetar "screenshot" ou "takescreenshot"
+            pcall(function()
+                local funcs = {screenshot, takescreenshot, capture_screenshot, CaptureScreenshot}
+                for _, fn in ipairs(funcs) do
+                    if type(fn) == "function" then
+                        local data = fn()
+                        if type(data) == "string" and #data > 100 then
+                            writefile(filename, data)
+                            finalOk = true
+                            break
+                        end
+                    end
+                end
+            end)
+
+            if finalOk or isfile(filename) then
+                camStatusLabel.Text = "âœ… Salva em PHONE/Photos"
+                camStatusLabel.TextColor3 = Color3.fromRGB(50, 205, 50)
+                refreshPhotos()
+            else
+                camStatusLabel.Text = "âš ï¸ Screenshot nÃ£o suportado neste executor"
+                camStatusLabel.TextColor3 = Color3.fromRGB(255, 180, 50)
+            end
         end
-        
-        task.wait(1.5)
-        captureInner.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-        camStatus.Text = ""
-        camPreviewLabel.Text = "Pronto para capturar"
+
+        takePhotoInner.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+        isCapturing = false
+        task.delay(2.5, function()
+            if camStatusLabel then
+                camStatusLabel.Text = ""
+            end
+        end)
     end)
 end)
 
--- ========== NAVEGAÇÃO ==========
+-- ========== NAVEGAÃ‡ÃƒO ==========
 local function openHomeScreen()
     isInPhotoViewer = false
     exitPhotoViewer()
@@ -2437,7 +2693,6 @@ closePhone = function()
     isMusicOpen = false
     currentApp = "home"
     updateMovementStats()
-    destroyPhoneModel()
 
     if equippedItem == "TzesPhone" then
         equippedItem = nil
@@ -2446,7 +2701,6 @@ end
 
 openPhone = function()
     isPhoneOpen = true
-    createPhoneModel()
     openHomeScreen()
     PhoneHome.Position = UDim2.new(1, -300, 1, 80)
     PhoneHome.Visible = true
@@ -2465,10 +2719,10 @@ togglePhone = function()
     end
 end
 
--- Tecla 0 para abrir/fechar o Phone (PC)
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.Zero then
+-- Tecla 0 no PC para abrir/fechar o phone
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Zero or input.KeyCode == Enum.KeyCode.KeypadZero then
         togglePhone()
     end
 end)
@@ -2509,10 +2763,10 @@ PlayBtn.MouseButton1Click:Connect(function()
     if not currentSound then return end
     if isPaused then
         currentSound:Resume()
-        PlayBtn.Text = "⏸"
+        PlayBtn.Text = "â¸"
     else
         currentSound:Pause()
-        PlayBtn.Text = "▶"
+        PlayBtn.Text = "â–¶"
     end
     isPaused = not isPaused
 end)
@@ -2536,13 +2790,13 @@ end)
 
 ShuffleBtn.MouseButton1Click:Connect(function()
     shuffleMode = not shuffleMode
-    ShuffleBtn.Text = shuffleMode and "🔀" or "➡️"
+    ShuffleBtn.Text = shuffleMode and "ðŸ”€" or "âž¡ï¸"
     ShuffleBtn.BackgroundColor3 = shuffleMode and Color3.fromRGB(50, 205, 50) or Color3.fromRGB(28, 28, 34)
 end)
 
 RepeatBtn.MouseButton1Click:Connect(function()
     repeatMode = not repeatMode
-    RepeatBtn.Text = repeatMode and "🔁" or "🔂"
+    RepeatBtn.Text = repeatMode and "ðŸ”" or "ðŸ”‚"
     RepeatBtn.BackgroundColor3 = repeatMode and Color3.fromRGB(50, 205, 50) or Color3.fromRGB(28, 28, 34)
 end)
 
@@ -2563,7 +2817,7 @@ refreshPhotos()
 end -- fim do if selectedItems.TzesPhone
 
 -- =========================================================
--- CHARACTER HANDLING (sem criação de Tools)
+-- CHARACTER HANDLING (sem criaÃ§Ã£o de Tools)
 -- =========================================================
 local function onCharacterAdded(char)
     cleanup()
@@ -2573,10 +2827,30 @@ local function onCharacterAdded(char)
     originalWalkSpeed = Humanoid.WalkSpeed
     phoneSettings.joinTime = os.clock()
 
+    local cam = Workspace.CurrentCamera
+    if cam then
+        -- originalFOV nÃ£o Ã© mais usado ativamente
+    end
+
     removeExtraRoots()
     createSounds()
 
     Humanoid.JumpPower = SETTINGS.JumpPower
+
+    -- Restaura lanterna do celular se estava ligada
+    if phoneSettings.flashlightEnabled then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            if phoneFlashlight then phoneFlashlight:Destroy() end
+            phoneFlashlight = Instance.new("SpotLight")
+            phoneFlashlight.Name = "PhoneFlashlight"
+            phoneFlashlight.Brightness = 2.5
+            phoneFlashlight.Range = 35
+            phoneFlashlight.Angle = 50
+            phoneFlashlight.Face = Enum.NormalId.Front
+            phoneFlashlight.Parent = root
+        end
+    end
 end
 
 Player.CharacterRemoving:Connect(cleanup)
