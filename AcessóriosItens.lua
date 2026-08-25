@@ -51,7 +51,8 @@ local defaultSettings = {
     flashlightEnabled = false,
     volume = 1,
     wallpaper = "rbxassetid://12506271392", -- padrão
-    phonePosition = {X = 1, Y = 0.5, XOffset = -300, YOffset = -220}
+    phonePosition = {X = 1, Y = 0.5, XOffset = -300, YOffset = -220},
+    hotbarPosition = {X = 1, Y = 1, XOffset = -58, YOffset = -72}
 }
 
 local phoneSettings = {}
@@ -118,7 +119,8 @@ HotbarGui.Parent = CoreGui
 local HotbarFrame = Instance.new("Frame")
 HotbarFrame.Name = "HotbarFrame"
 HotbarFrame.Size = UDim2.new(0, 48, 0, 40)
-HotbarFrame.Position = UDim2.new(1, -58, 1, -72)
+local hbPos = phoneSettings.hotbarPosition or defaultSettings.hotbarPosition
+HotbarFrame.Position = UDim2.new(hbPos.X, hbPos.XOffset, hbPos.Y, hbPos.YOffset)
 HotbarFrame.BackgroundTransparency = 1
 HotbarFrame.Parent = HotbarGui
 
@@ -170,8 +172,8 @@ selectedFrame.BackgroundTransparency = 1
 selectedFrame.Visible = false
 selectedFrame.Parent = phoneSlot
 local selStroke = Instance.new("UIStroke")
-selStroke.Color = Color3.fromRGB(255, 255, 255)
-selStroke.Thickness = 2.5
+selStroke.Color = Color3.fromRGB(50, 205, 50)
+selStroke.Thickness = 1.2
 selStroke.Parent = selectedFrame
 Instance.new("UICorner", selectedFrame).CornerRadius = UDim.new(0, 10)
 
@@ -432,11 +434,33 @@ local CameraAppIcon = createAppIcon("Câmera", "📷", Color3.fromRGB(255, 80, 8
 
 local homeNavBtn, homeBackBtn = createNavBar(PhoneHome)
 
--- Clock + FPS
+-- Relógio fixo em TODOS os apps (igual celular real)
+local allStatusClocks = {homeStatus}
+
+local function addStatusClock(parentFrame, z)
+    local clk = Instance.new("TextLabel")
+    clk.Name = "StatusClock"
+    clk.Size = UDim2.new(0.5, -10, 0, 22)
+    clk.Position = UDim2.new(0, 20, 0, 40)
+    clk.BackgroundTransparency = 1
+    clk.Text = os.date("%H:%M")
+    clk.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clk.Font = Enum.Font.GothamBold
+    clk.TextSize = 14
+    clk.TextXAlignment = Enum.TextXAlignment.Left
+    clk.ZIndex = z or 5
+    clk.Parent = parentFrame
+    table.insert(allStatusClocks, clk)
+    return clk
+end
+
 task.spawn(function()
     while true do
-        if homeStatus and homeStatus.Parent then
-            homeStatus.Text = os.date("%H:%M")
+        local t = os.date("%H:%M")
+        for _, clk in ipairs(allStatusClocks) do
+            if clk and clk.Parent then
+                clk.Text = t
+            end
         end
         task.wait(1)
     end
@@ -721,6 +745,7 @@ IDInput.Visible = false
 IDInput.Parent = MainFrame
 Instance.new("UICorner", IDInput).CornerRadius = UDim.new(0, 10)
 
+addStatusClock(MainFrame, 5)
 local musicNavBtn, musicBackBtn = createNavBar(MainFrame)
 
 local function formatTime(seconds)
@@ -909,6 +934,7 @@ swResetBtn.TextSize = 16
 swResetBtn.Parent = StopwatchFrame
 Instance.new("UICorner", swResetBtn).CornerRadius = UDim.new(0, 14)
 
+addStatusClock(StopwatchFrame, 5)
 local swNavBtn, swBackBtn = createNavBar(StopwatchFrame)
 
 local swRunning = false
@@ -1216,6 +1242,7 @@ cfgLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     cfgScroll.CanvasSize = UDim2.new(0, 0, 0, cfgLayout.AbsoluteContentSize.Y + 20)
 end)
 
+addStatusClock(ConfigFrame, 5)
 local cfgNavBtn, cfgBackBtn = createNavBar(ConfigFrame)
 
 -- ========== GALERIA ==========
@@ -1385,6 +1412,100 @@ deletePhotoBtn.TextSize = 13
 deletePhotoBtn.Parent = PhotoViewerView
 Instance.new("UICorner", deletePhotoBtn).CornerRadius = UDim.new(0, 10)
 
+-- ========== MENU DE PONTINHOS (⋯) NO CANTO SUPERIOR ==========
+local dotsBtn = Instance.new("TextButton")
+dotsBtn.Name = "DotsMenuBtn"
+dotsBtn.Size = UDim2.new(0, 36, 0, 36)
+dotsBtn.Position = UDim2.new(1, -46, 0, 8)
+dotsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+dotsBtn.BackgroundTransparency = 0.3
+dotsBtn.Text = "⋯"
+dotsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+dotsBtn.Font = Enum.Font.GothamBold
+dotsBtn.TextSize = 22
+dotsBtn.ZIndex = 30
+dotsBtn.Parent = PhotoViewerView
+Instance.new("UICorner", dotsBtn).CornerRadius = UDim.new(0, 10)
+
+local dotsMenu = Instance.new("Frame")
+dotsMenu.Name = "DotsMenu"
+dotsMenu.Size = UDim2.new(0, 175, 0, 96)
+dotsMenu.Position = UDim2.new(1, -185, 0, 48)
+dotsMenu.BackgroundColor3 = Color3.fromRGB(245, 245, 248) -- branco sujo
+dotsMenu.BorderSizePixel = 0
+dotsMenu.Visible = false
+dotsMenu.ZIndex = 35
+dotsMenu.Parent = PhotoViewerView
+Instance.new("UICorner", dotsMenu).CornerRadius = UDim.new(0, 14)
+local dotsMenuStroke = Instance.new("UIStroke")
+dotsMenuStroke.Color = Color3.fromRGB(30, 30, 35)
+dotsMenuStroke.Thickness = 1.4
+dotsMenuStroke.Parent = dotsMenu
+
+local setWallpaperBtn = Instance.new("TextButton")
+setWallpaperBtn.Size = UDim2.new(1, -14, 0, 38)
+setWallpaperBtn.Position = UDim2.new(0, 7, 0, 7)
+setWallpaperBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+setWallpaperBtn.Text = "🖼️  Definir Wallpaper"
+setWallpaperBtn.TextColor3 = Color3.fromRGB(20, 20, 25)
+setWallpaperBtn.Font = Enum.Font.Gotham
+setWallpaperBtn.TextSize = 13
+setWallpaperBtn.ZIndex = 36
+setWallpaperBtn.Parent = dotsMenu
+Instance.new("UICorner", setWallpaperBtn).CornerRadius = UDim.new(0, 9)
+
+local menuDeleteBtn = Instance.new("TextButton")
+menuDeleteBtn.Size = UDim2.new(1, -14, 0, 38)
+menuDeleteBtn.Position = UDim2.new(0, 7, 0, 51)
+menuDeleteBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+menuDeleteBtn.Text = "🗑️  Excluir Foto"
+menuDeleteBtn.TextColor3 = Color3.fromRGB(200, 40, 40)
+menuDeleteBtn.Font = Enum.Font.Gotham
+menuDeleteBtn.TextSize = 13
+menuDeleteBtn.ZIndex = 36
+menuDeleteBtn.Parent = dotsMenu
+Instance.new("UICorner", menuDeleteBtn).CornerRadius = UDim.new(0, 9)
+
+dotsBtn.MouseButton1Click:Connect(function()
+    dotsMenu.Visible = not dotsMenu.Visible
+end)
+
+local doDeleteCurrentPhoto -- forward declaration
+
+menuDeleteBtn.MouseButton1Click:Connect(function()
+    if doDeleteCurrentPhoto then doDeleteCurrentPhoto() end
+end)
+
+setWallpaperBtn.MouseButton1Click:Connect(function()
+    if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
+    local photo = filteredPhotoList[currentPhotoIndex]
+    local asset = nil
+    if photo.contentId and photo.contentId ~= "" then
+        asset = photo.contentId
+    else
+        local ok, result = pcall(function()
+            local content = readfile(photo.path)
+            if content and (content:find("rbxasset") or content:find("http")) then
+                return content:match("([^\n]+)")
+            end
+            return getcustomasset(photo.path)
+        end)
+        if ok and result then asset = result end
+    end
+    if asset and asset ~= "" then
+        currentWallpaper = asset
+        phoneSettings.wallpaper = asset
+        homeBg.Image = asset
+        saveSettings()
+        dotsMenu.Visible = false
+        setWallpaperBtn.Text = "✓ Aplicado!"
+        task.delay(1.2, function()
+            if setWallpaperBtn then setWallpaperBtn.Text = "🖼️  Definir Wallpaper" end
+        end)
+    end
+end)
+
+addStatusClock(GalleryFrame, 5)
 local galNavBtn, galBackBtn = createNavBar(GalleryFrame)
 
 local function exitPhotoViewer()
@@ -1399,6 +1520,7 @@ local function exitPhotoViewer()
     currentZoom = 1
     PhotoDisplay.Size = UDim2.new(1, -16, 1, -120)
     PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
+    if dotsMenu then dotsMenu.Visible = false end
 end
 
 local function openPhotoByIndex(idx)
@@ -1417,10 +1539,23 @@ local function openPhotoByIndex(idx)
     PhotoDisplay.Size = UDim2.new(1, -16, 1, -120)
     PhotoDisplay.Position = UDim2.new(0, 8, 0, 40)
 
-    local success, asset = pcall(function()
-        return getcustomasset(photo.path)
-    end)
-    if success and asset and asset ~= "" then
+    local asset = nil
+    if photo.contentId and photo.contentId ~= "" then
+        asset = photo.contentId
+    else
+        local success, result = pcall(function()
+            -- tenta ler contentId se for captura
+            local content = readfile(photo.path)
+            if content and (content:find("rbxassetid") or content:find("rbxhttp") or content:find("http")) then
+                return content:match("([^\n]+)")
+            end
+            return getcustomasset(photo.path)
+        end)
+        if success and result and result ~= "" then
+            asset = result
+        end
+    end
+    if asset then
         PhotoDisplay.Image = asset
     else
         PhotoNameLabel.Text = "Erro ao carregar foto"
@@ -1433,25 +1568,6 @@ prevPhotoBtn.MouseButton1Click:Connect(function()
 end)
 nextPhotoBtn.MouseButton1Click:Connect(function()
     if #filteredPhotoList > 0 then openPhotoByIndex(currentPhotoIndex + 1) end
-end)
-
-deletePhotoBtn.MouseButton1Click:Connect(function()
-    if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
-    local photo = filteredPhotoList[currentPhotoIndex]
-    pcall(function()
-        delfile(photo.path)
-    end)
-    -- remove da lista
-    for i, p in ipairs(photoList) do
-        if p.path == photo.path then
-            table.remove(photoList, i)
-            break
-        end
-    end
-    exitPhotoViewer()
-    -- atualiza lista
-    task.wait(0.1)
-    -- chama update depois
 end)
 
 local function updatePhotoList()
@@ -1489,7 +1605,17 @@ local function updatePhotoList()
             thumbBtn.Parent = PhotoScrollList
             Instance.new("UICorner", thumbBtn).CornerRadius = UDim.new(0, 10)
             pcall(function()
-                local asset = getcustomasset(photo.path)
+                local asset = nil
+                if photo.contentId and photo.contentId ~= "" then
+                    asset = photo.contentId
+                else
+                    local content = readfile(photo.path)
+                    if content and (content:find("rbxassetid") or content:find("rbxhttp") or content:find("http")) then
+                        asset = content:match("([^\n]+)")
+                    else
+                        asset = getcustomasset(photo.path)
+                    end
+                end
                 if asset then thumbBtn.Image = asset end
             end)
             thumbBtn.MouseButton1Click:Connect(function()
@@ -1500,6 +1626,28 @@ local function updatePhotoList()
     task.wait()
     PhotoScrollList.CanvasSize = UDim2.new(0, 0, 0, PhotoUIGridLayout.AbsoluteContentSize.Y + 10)
 end
+
+doDeleteCurrentPhoto = function()
+    if #filteredPhotoList == 0 or currentPhotoIndex < 1 then return end
+    local photo = filteredPhotoList[currentPhotoIndex]
+    pcall(function()
+        delfile(photo.path)
+    end)
+    for i, p in ipairs(photoList) do
+        if p.path == photo.path then
+            table.remove(photoList, i)
+            break
+        end
+    end
+    if dotsMenu then dotsMenu.Visible = false end
+    exitPhotoViewer()
+    task.wait(0.05)
+    updatePhotoList()
+end
+
+deletePhotoBtn.MouseButton1Click:Connect(function()
+    if doDeleteCurrentPhoto then doDeleteCurrentPhoto() end
+end)
 
 local function refreshPhotos()
     photoList = {}
@@ -1517,7 +1665,19 @@ local function refreshPhotos()
             if lower:match("%.png$") or lower:match("%.jpg$") or lower:match("%.jpeg$") or lower:match("%.webp$") or lower:match("%.bmp$") or lower:match("%.gif$") then
                 local name = str:match("([^/\\]+)$") or str
                 name = name:gsub("%.%w+$", "")
-                table.insert(photoList, {name = name, path = file})
+                local entry = {name = name, path = file}
+                -- se for captura, tenta ler o contentId guardado dentro do arquivo
+                if name:find("Capture_") then
+                    local ok, content = pcall(readfile, file)
+                    if ok and content and content ~= "" then
+                        local cid = content:match("([^\n]+)")
+                        if cid and (cid:find("rbxasset") or cid:find("http") or cid:find("rbxhttp")) then
+                            entry.contentId = cid
+                            entry.isCapture = true
+                        end
+                    end
+                end
+                table.insert(photoList, entry)
             end
         end
     end
@@ -1607,6 +1767,7 @@ camStatus.Font = Enum.Font.Gotham
 camStatus.TextSize = 13
 camStatus.Parent = CameraFrame
 
+addStatusClock(CameraFrame, 5)
 local camNavBtn, camBackBtn = createNavBar(CameraFrame)
 
 captureBtn.MouseButton1Click:Connect(function()
@@ -1619,45 +1780,58 @@ captureBtn.MouseButton1Click:Connect(function()
     flash.Parent = CameraFrame
     Instance.new("UICorner", flash).CornerRadius = UDim.new(0, 28)
     TweenService:Create(flash, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-    task.delay(0.45, function() flash:Destroy() end)
+    task.delay(0.45, function() if flash and flash.Parent then flash:Destroy() end end)
 
-    -- Tenta CaptureService
+    local timestamp = os.date("%Y%m%d_%H%M%S")
+    local fileName = "PHONE/Photos/Capture_" .. timestamp .. ".png"
     local captured = false
+
     pcall(function()
         local CaptureService = game:GetService("CaptureService")
         if CaptureService then
             CaptureService:CaptureScreenshot(function(contentId)
-                if contentId then
-                    -- Salva referência
-                    local timestamp = os.date("%Y%m%d_%H%M%S")
-                    local fileName = "PHONE/Photos/Capture_" .. timestamp .. ".txt"
+                if contentId and contentId ~= "" then
+                    -- Salva o contentId real para a galeria poder carregar
                     pcall(function()
-                        writefile(fileName, "rbxassetid_or_content:" .. tostring(contentId) .. "\n" .. os.date())
+                        writefile(fileName, tostring(contentId))
                     end)
-                    camStatus.Text = "Foto salva em PHONE/Photos!"
+                    -- também guarda na lista virtual
+                    table.insert(photoList, {
+                        name = "Capture_" .. timestamp,
+                        path = fileName,
+                        isCapture = true,
+                        contentId = contentId
+                    })
+                    camStatus.Text = "✓ Foto salva!"
                     captured = true
                     task.delay(1.5, function()
                         if camStatus then camStatus.Text = "" end
                     end)
-                    refreshPhotos()
+                    updatePhotoList()
                 end
             end)
         end
     end)
 
-    if not captured then
-        -- Fallback: salva um marcador
-        local timestamp = os.date("%Y%m%d_%H%M%S")
-        local fileName = "PHONE/Photos/Capture_" .. timestamp .. ".txt"
-        pcall(function()
-            writefile(fileName, "Captura simulada - " .. os.date() .. "\nUse a galeria do Roblox para fotos reais.")
-        end)
-        camStatus.Text = "Marcador salvo em PHONE/Photos"
-        task.delay(1.5, function()
-            if camStatus then camStatus.Text = "" end
-        end)
-        refreshPhotos()
-    end
+    task.delay(0.6, function()
+        if not captured then
+            -- Fallback: salva um placeholder que a galeria reconhece
+            pcall(function()
+                writefile(fileName, "rbxassetid://12506271392")
+            end)
+            table.insert(photoList, {
+                name = "Capture_" .. timestamp,
+                path = fileName,
+                isCapture = true,
+                contentId = "rbxassetid://12506271392"
+            })
+            camStatus.Text = "✓ Foto salva (placeholder)"
+            task.delay(1.5, function()
+                if camStatus then camStatus.Text = "" end
+            end)
+            updatePhotoList()
+        end
+    end)
 end)
 
 -- ========== NAVEGAÇÃO ==========
@@ -1838,66 +2012,108 @@ local function togglePhone()
     end
 end
 
--- ========== HOLD 0.45s PARA ARRASTAR O BOTÃO DO PHONE ==========
+-- ========== HOLD 0.45s PARA ARRASTAR O BOTÃO DO PHONE (Hotbar) ==========
 local holdStart = 0
-local isDraggingPhone = false
+local isDraggingHotbar = false
 local dragConnection = nil
+local dragOffset = Vector2.new(0, 0)
+local holdThread = nil
 
-phoneSlot.MouseButton1Down:Connect(function()
-    holdStart = os.clock()
-    task.delay(0.45, function()
-        if holdStart > 0 and (os.clock() - holdStart) >= 0.45 and not isDraggingPhone then
-            isDraggingPhone = true
-            -- animação de "arrastando"
-            TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
-            -- permite arrastar a posição do phone
-            dragConnection = RunService.RenderStepped:Connect(function()
-                if isDraggingPhone and isPhoneOpen then
-                    local mouse = UserInputService:GetMouseLocation()
-                    local newPos = UDim2.new(0, mouse.X - 140, 0, mouse.Y - 220)
-                    PhoneHome.Position = newPos
-                    MainFrame.Position = newPos
-                    StopwatchFrame.Position = newPos
-                    ConfigFrame.Position = newPos
-                    GalleryFrame.Position = newPos
-                    CameraFrame.Position = newPos
-                end
-            end)
-        end
+local function startHotbarDrag()
+    if isDraggingHotbar then return end
+    isDraggingHotbar = true
+    TweenService:Create(phoneSlot, TweenInfo.new(0.15), {
+        Size = UDim2.new(0, 42, 0, 42),
+        BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+    }):Play()
+
+    local mouse = UserInputService:GetMouseLocation()
+    local absPos = HotbarFrame.AbsolutePosition
+    dragOffset = Vector2.new(mouse.X - absPos.X, mouse.Y - absPos.Y)
+
+    if dragConnection then dragConnection:Disconnect() end
+    dragConnection = RunService.RenderStepped:Connect(function()
+        if not isDraggingHotbar then return end
+        local m = UserInputService:GetMouseLocation()
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        local vp = cam.ViewportSize
+        local size = HotbarFrame.AbsoluteSize
+        local x = math.clamp(m.X - dragOffset.X, 4, vp.X - size.X - 4)
+        local y = math.clamp(m.Y - dragOffset.Y, 4, vp.Y - size.Y - 4)
+        HotbarFrame.Position = UDim2.new(0, x, 0, y)
     end)
-end)
+end
 
-phoneSlot.MouseButton1Up:Connect(function()
-    local held = os.clock() - holdStart
+local function stopHotbarDrag(wasDrag)
     holdStart = 0
-    if isDraggingPhone then
-        isDraggingPhone = false
-        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
-        -- salva a nova posição
-        local pos = PhoneHome.Position
-        phoneSettings.phonePosition = {
+    if holdThread then
+        pcall(function() task.cancel(holdThread) end)
+        holdThread = nil
+    end
+    if isDraggingHotbar then
+        isDraggingHotbar = false
+        if dragConnection then
+            dragConnection:Disconnect()
+            dragConnection = nil
+        end
+        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {
+            Size = UDim2.new(0, 36, 0, 36),
+            BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+        }):Play()
+        -- salva posição do botão
+        local pos = HotbarFrame.Position
+        phoneSettings.hotbarPosition = {
             X = pos.X.Scale,
             Y = pos.Y.Scale,
             XOffset = pos.X.Offset,
             YOffset = pos.Y.Offset
         }
         saveSettings()
-    else
-        -- clique normal
-        if held < 0.45 then
-            togglePhone()
+    elseif wasDrag == false then
+        -- clique normal (soltou antes de 0.45s)
+        togglePhone()
+    end
+end
+
+phoneSlot.MouseButton1Down:Connect(function()
+    holdStart = os.clock()
+    holdThread = task.delay(0.45, function()
+        if holdStart > 0 and (os.clock() - holdStart) >= 0.44 then
+            startHotbarDrag()
         end
+    end)
+end)
+
+phoneSlot.MouseButton1Up:Connect(function()
+    local held = os.clock() - holdStart
+    if isDraggingHotbar then
+        stopHotbarDrag(true)
+    else
+        stopHotbarDrag(false)
     end
 end)
 
-phoneSlot.MouseLeave:Connect(function()
-    if isDraggingPhone then
-        isDraggingPhone = false
-        if dragConnection then dragConnection:Disconnect() dragConnection = nil end
-        TweenService:Create(phoneSlot, TweenInfo.new(0.15), {Size = UDim2.new(0, 36, 0, 36), BackgroundColor3 = Color3.fromRGB(28, 28, 36)}):Play()
+-- suporte touch
+phoneSlot.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        holdStart = os.clock()
+        holdThread = task.delay(0.45, function()
+            if holdStart > 0 and (os.clock() - holdStart) >= 0.44 then
+                startHotbarDrag()
+            end
+        end)
     end
-    holdStart = 0
+end)
+
+phoneSlot.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        if isDraggingHotbar then
+            stopHotbarDrag(true)
+        else
+            stopHotbarDrag(false)
+        end
+    end
 end)
 
 -- Tecla 0 (PC)
