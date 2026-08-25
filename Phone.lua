@@ -70,10 +70,7 @@ local function loadSettings()
         end
         phoneSettings = data
     else
-        phoneSettings = {}
-        for k, v in pairs(defaultSettings) do
-            phoneSettings[k] = v
-        end
+        phoneSettings = table.clone(defaultSettings)
     end
 end
 
@@ -433,7 +430,6 @@ local MusicAppIcon = createAppIcon("Música", "🎵", Color3.fromRGB(0, 180, 255
 local StopwatchAppIcon = createAppIcon("Cronômetro", "⏱️", Color3.fromRGB(255, 140, 30), UDim2.new(0, 85, 0, 0))
 local ConfigAppIcon = createAppIcon("Config", "⚙️", Color3.fromRGB(120, 120, 130), UDim2.new(0, 165, 0, 0))
 local GalleryAppIcon = createAppIcon("Galeria", "🖼️", Color3.fromRGB(180, 80, 220), UDim2.new(0, 5, 0, 100))
-local ContactsAppIcon = createAppIcon("Contatos", "C", Color3.fromRGB(0, 200, 120), UDim2.new(0, 85, 0, 100))
 
 local homeNavBtn, homeBackBtn = createNavBar(PhoneHome)
 
@@ -1532,233 +1528,6 @@ PhotoSearchBox.Changed:Connect(function(prop)
     if prop == "Text" then updatePhotoList() end
 end)
 
--- ========== CONTATOS (SÓ SPECTATE) ==========
-local ContactsFrame = Instance.new("Frame")
-ContactsFrame.Name = "ContactsFrame"
-ContactsFrame.Size = UDim2.new(0, 280, 0, 440)
-ContactsFrame.Position = PhoneHome.Position
-ContactsFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-ContactsFrame.BorderSizePixel = 0
-ContactsFrame.Visible = false
-ContactsFrame.Active = true
-ContactsFrame.Draggable = false
-ContactsFrame.Parent = ScreenGui
-Instance.new("UICorner", ContactsFrame).CornerRadius = UDim.new(0, 28)
-
-local ctBezel = Instance.new("UIStroke")
-ctBezel.Color = Color3.fromRGB(50, 205, 50)
-ctBezel.Thickness = 6
-ctBezel.Parent = ContactsFrame
-
-local ctEars = Instance.new("ImageLabel")
-ctEars.Size = UDim2.new(0, 340, 0, 95)
-ctEars.Position = UDim2.new(0.5, -170, 0, -48)
-ctEars.BackgroundTransparency = 1
-ctEars.Image = "rbxassetid://108135642658853"
-ctEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
-ctEars.ZIndex = ContactsFrame.ZIndex + 2
-ctEars.Parent = ContactsFrame
-
-local ctNotch = Instance.new("Frame")
-ctNotch.Size = UDim2.new(0, 82, 0, 24)
-ctNotch.Position = UDim2.new(0.5, -41, 0, 9)
-ctNotch.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ctNotch.BorderSizePixel = 0
-ctNotch.Parent = ContactsFrame
-Instance.new("UICorner", ctNotch).CornerRadius = UDim.new(1, 0)
-
-local ctTitle = Instance.new("TextLabel")
-ctTitle.Size = UDim2.new(1, 0, 0, 30)
-ctTitle.Position = UDim2.new(0, 0, 0, 42)
-ctTitle.BackgroundTransparency = 1
-ctTitle.Text = "Contatos"
-ctTitle.TextColor3 = Color3.new(1, 1, 1)
-ctTitle.Font = Enum.Font.GothamBold
-ctTitle.TextSize = 20
-ctTitle.Parent = ContactsFrame
-
-local ctSearchBox = Instance.new("TextBox")
-ctSearchBox.Size = UDim2.new(1, -24, 0, 32)
-ctSearchBox.Position = UDim2.new(0, 12, 0, 80)
-ctSearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-ctSearchBox.PlaceholderText = "Pesquisar player..."
-ctSearchBox.Text = ""
-ctSearchBox.TextColor3 = Color3.new(1, 1, 1)
-ctSearchBox.Font = Enum.Font.Gotham
-ctSearchBox.TextSize = 13
-ctSearchBox.Parent = ContactsFrame
-Instance.new("UICorner", ctSearchBox).CornerRadius = UDim.new(0, 10)
-
-local ctScroll = Instance.new("ScrollingFrame")
-ctScroll.Size = UDim2.new(1, -24, 0, 260)
-ctScroll.Position = UDim2.new(0, 12, 0, 120)
-ctScroll.BackgroundTransparency = 1
-ctScroll.ScrollBarThickness = 3
-ctScroll.ScrollBarImageColor3 = Color3.fromRGB(50, 205, 50)
-ctScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-ctScroll.Parent = ContactsFrame
-
-local ctListLayout = Instance.new("UIListLayout")
-ctListLayout.Padding = UDim.new(0, 6)
-ctListLayout.Parent = ctScroll
-
-local spectateBtn = Instance.new("TextButton")
-spectateBtn.Size = UDim2.new(1, -24, 0, 36)
-spectateBtn.Position = UDim2.new(0, 12, 1, -80)
-spectateBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-spectateBtn.Text = "Parar Spectate"
-spectateBtn.TextColor3 = Color3.new(1, 1, 1)
-spectateBtn.Font = Enum.Font.GothamBold
-spectateBtn.TextSize = 14
-spectateBtn.Visible = false
-spectateBtn.Parent = ContactsFrame
-Instance.new("UICorner", spectateBtn).CornerRadius = UDim.new(0, 10)
-
-local ctNavBtn, ctBackBtn = createNavBar(ContactsFrame)
-
-local isSpectating = false
-local spectateTarget = nil
-local originalCameraSubject = nil
-
-local function stopSpectate()
-    if not isSpectating then return end
-    isSpectating = false
-    spectateTarget = nil
-    local cam = Workspace.CurrentCamera
-    if cam and originalCameraSubject then
-        cam.CameraSubject = originalCameraSubject
-        cam.CameraType = Enum.CameraType.Custom
-    end
-    originalCameraSubject = nil
-    spectateBtn.Visible = false
-end
-
-local function startSpectate(player)
-    if not player or not player.Character then return end
-    local hum = player.Character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local cam = Workspace.CurrentCamera
-    if not cam then return end
-
-    if not isSpectating then
-        originalCameraSubject = cam.CameraSubject
-    end
-
-    isSpectating = true
-    spectateTarget = player
-    cam.CameraSubject = hum
-    cam.CameraType = Enum.CameraType.Custom
-    spectateBtn.Visible = true
-    spectateBtn.Text = "Parar Spectate (" .. (player.DisplayName or player.Name) .. ")"
-end
-
-spectateBtn.MouseButton1Click:Connect(stopSpectate)
-
-local function updateContactsList()
-    for _, v in pairs(ctScroll:GetChildren()) do
-        if v:IsA("Frame") then v:Destroy() end
-    end
-
-    local search = ctSearchBox.Text:lower()
-    local players = Players:GetPlayers()
-    local count = 0
-
-    for _, plr in ipairs(players) do
-        if plr ~= Player then
-            local name = plr.Name
-            local display = plr.DisplayName or name
-            local matches = true
-            if search ~= "" and not name:lower():find(search) and not display:lower():find(search) then
-                matches = false
-            end
-
-            if matches then
-                count = count + 1
-                local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 48)
-                row.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-                row.Parent = ctScroll
-                Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
-
-                local nameLabel = Instance.new("TextLabel")
-                nameLabel.Size = UDim2.new(1, -90, 0, 22)
-                nameLabel.Position = UDim2.new(0, 12, 0, 4)
-                nameLabel.BackgroundTransparency = 1
-                nameLabel.Text = display
-                nameLabel.TextColor3 = Color3.new(1, 1, 1)
-                nameLabel.Font = Enum.Font.GothamBold
-                nameLabel.TextSize = 14
-                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-                nameLabel.Parent = row
-
-                local userLabel = Instance.new("TextLabel")
-                userLabel.Size = UDim2.new(1, -90, 0, 16)
-                userLabel.Position = UDim2.new(0, 12, 0, 26)
-                userLabel.BackgroundTransparency = 1
-                userLabel.Text = "@" .. name
-                userLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-                userLabel.Font = Enum.Font.Gotham
-                userLabel.TextSize = 11
-                userLabel.TextXAlignment = Enum.TextXAlignment.Left
-                userLabel.Parent = row
-
-                local specBtn = Instance.new("TextButton")
-                specBtn.Size = UDim2.new(0, 70, 0, 32)
-                specBtn.Position = UDim2.new(1, -80, 0.5, -16)
-                specBtn.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-                specBtn.Text = "Ver"
-                specBtn.TextColor3 = Color3.new(0, 0, 0)
-                specBtn.Font = Enum.Font.GothamBold
-                specBtn.TextSize = 13
-                specBtn.Parent = row
-                Instance.new("UICorner", specBtn).CornerRadius = UDim.new(0, 8)
-
-                specBtn.MouseButton1Click:Connect(function()
-                    startSpectate(plr)
-                end)
-            end
-        end
-    end
-
-    if count == 0 then
-        local empty = Instance.new("Frame")
-        empty.Size = UDim2.new(1, 0, 0, 50)
-        empty.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-        empty.Parent = ctScroll
-        Instance.new("UICorner", empty).CornerRadius = UDim.new(0, 10)
-        local emptyLabel = Instance.new("TextLabel")
-        emptyLabel.Size = UDim2.new(1, 0, 1, 0)
-        emptyLabel.BackgroundTransparency = 1
-        emptyLabel.Text = search == "" and "Nenhum player no servidor" or "Nenhum player encontrado"
-        emptyLabel.TextColor3 = Color3.fromRGB(130, 130, 150)
-        emptyLabel.TextSize = 13
-        emptyLabel.Parent = empty
-    end
-
-    ctScroll.CanvasSize = UDim2.new(0, 0, 0, ctListLayout.AbsoluteContentSize.Y + 10)
-end
-
-ctSearchBox.Changed:Connect(function(prop)
-    if prop == "Text" then updateContactsList() end
-end)
-
--- Atualiza lista quando player entra/sai
-Players.PlayerAdded:Connect(function()
-    if currentApp == "contacts" then
-        task.wait(0.3)
-        updateContactsList()
-    end
-end)
-Players.PlayerRemoving:Connect(function(plr)
-    if spectateTarget == plr then
-        stopSpectate()
-    end
-    if currentApp == "contacts" then
-        task.wait(0.1)
-        updateContactsList()
-    end
-end)
-
 -- ========== NAVEGAÇÃO ==========
 local function openHomeScreen()
     isInPhotoViewer = false
@@ -1770,14 +1539,12 @@ local function openHomeScreen()
     StopwatchFrame.Position = pos
     ConfigFrame.Position = pos
     GalleryFrame.Position = pos
-    ContactsFrame.Position = pos
 
     PhoneHome.Visible = true
     MainFrame.Visible = false
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    ContactsFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(PhoneHome)
     selectedFrame.Visible = true
@@ -1794,7 +1561,6 @@ local function openMusicApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    ContactsFrame.Visible = false
     isMusicOpen = true
     refreshFiles()
     attachVolumeTo(MainFrame)
@@ -1811,7 +1577,6 @@ local function openStopwatchApp()
     StopwatchFrame.Visible = true
     ConfigFrame.Visible = false
     GalleryFrame.Visible = false
-    ContactsFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(StopwatchFrame)
 end
@@ -1827,7 +1592,6 @@ local function openConfigApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = true
     GalleryFrame.Visible = false
-    ContactsFrame.Visible = false
     isMusicOpen = false
     attachVolumeTo(ConfigFrame)
 end
@@ -1843,27 +1607,9 @@ local function openGalleryApp()
     StopwatchFrame.Visible = false
     ConfigFrame.Visible = false
     GalleryFrame.Visible = true
-    ContactsFrame.Visible = false
     isMusicOpen = false
     refreshPhotos()
     attachVolumeTo(GalleryFrame)
-end
-
-local function openContactsApp()
-    isInPhotoViewer = false
-    exitPhotoViewer()
-    currentApp = "contacts"
-    local pos = PhoneHome.Position
-    ContactsFrame.Position = pos
-    PhoneHome.Visible = false
-    MainFrame.Visible = false
-    StopwatchFrame.Visible = false
-    ConfigFrame.Visible = false
-    GalleryFrame.Visible = false
-    ContactsFrame.Visible = true
-    isMusicOpen = false
-    updateContactsList()
-    attachVolumeTo(ContactsFrame)
 end
 
 local function goHome()
@@ -1882,27 +1628,24 @@ musicNavBtn.MouseButton1Click:Connect(goHome)
 swNavBtn.MouseButton1Click:Connect(goHome)
 cfgNavBtn.MouseButton1Click:Connect(goHome)
 galNavBtn.MouseButton1Click:Connect(goHome)
-ctNavBtn.MouseButton1Click:Connect(goHome)
 
 homeBackBtn.MouseButton1Click:Connect(handleBack)
 musicBackBtn.MouseButton1Click:Connect(handleBack)
 swBackBtn.MouseButton1Click:Connect(handleBack)
 cfgBackBtn.MouseButton1Click:Connect(handleBack)
 galBackBtn.MouseButton1Click:Connect(handleBack)
-ctBackBtn.MouseButton1Click:Connect(handleBack)
 
 MusicAppIcon.MouseButton1Click:Connect(openMusicApp)
 StopwatchAppIcon.MouseButton1Click:Connect(openStopwatchApp)
 ConfigAppIcon.MouseButton1Click:Connect(openConfigApp)
 GalleryAppIcon.MouseButton1Click:Connect(openGalleryApp)
-ContactsAppIcon.MouseButton1Click:Connect(openContactsApp)
 
 -- ========== OPEN / CLOSE PHONE ==========
 local function closePhone()
     isInPhotoViewer = false
     exitPhotoViewer()
     local target = UDim2.new(1, -300, 1, 80)
-    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame, ContactsFrame}
+    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame}
     for _, f in ipairs(frames) do
         if f.Visible then
             local tween = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = target})
