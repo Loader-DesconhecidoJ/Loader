@@ -69,7 +69,17 @@ end
 local function NukeVFX(obj)
     if IsPartOfCharacter(obj) then
         local className = obj.ClassName
-        if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
+        if className == "Trail" then
+            task.defer(function()
+                pcall(function()
+                    obj.Texture = ""
+                    obj.TextureMode = Enum.TextureMode.Stretch
+                    obj.TextureLength = 1
+                end)
+            end)
+            return
+        end
+        if className == "ParticleEmitter" or className == "Beam" or 
            className == "Fire" or className == "Smoke" or className == "Sparkles" then
             
             if math.random(1, 100) <= 90 then
@@ -98,7 +108,18 @@ local function NukeVFX(obj)
         return
     end
 
-    if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
+    if className == "Trail" then
+        task.defer(function()
+            pcall(function()
+                obj.Texture = ""
+                obj.TextureMode = Enum.TextureMode.Stretch
+                obj.TextureLength = 1
+            end)
+        end)
+        return
+    end
+
+    if className == "ParticleEmitter" or className == "Beam" or 
        className == "Fire" or className == "Smoke" or className == "Sparkles" then
         
         if math.random(1, 100) <= 90 then
