@@ -5,28 +5,16 @@ local RunService = game:GetService("RunService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Gráficos fixos em Quality Level 1 permanente
 pcall(function()
-    local settings = UserSettings():GetService("UserGameSettings")
-    settings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
-end)
-
--- Força Quality Level 1 continuamente (evita o jogo resetar)
-RunService.Heartbeat:Connect(function()
-    pcall(function()
-        local settings = UserSettings():GetService("UserGameSettings")
-        if settings.SavedQualityLevel ~= Enum.SavedQualitySetting.QualityLevel1 then
-            settings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
-        end
-    end)
+    UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
 end)
 
 local function NeutralizeLightingAndFilters(obj)
     if obj:IsA("PostEffect") then
         pcall(function()
             obj.Enabled = false
-
-            if obj:IsA("ColorCorrectionEffect") or obj.ClassName == "ColorCorrection" then
+            
+            if obj:IsA("ColorCorrectionEffect") then
                 obj.Brightness = 0
                 obj.Contrast = 0
                 obj.Saturation = 0
@@ -45,19 +33,16 @@ local function NeutralizeLightingAndFilters(obj)
                 obj.InFocusRadius = 999
                 obj.NearIntensity = 0
                 obj.FarIntensity = 0
-            elseif obj:IsA("DistortionEffect") or obj.ClassName == "Distortion" then
-                obj.Enabled = false
             end
 
-            -- Proteção contra reativação (ColorCorrection, Distortion, Freeze, Shake etc)
+            -- Previne reativação e bugs de freeze/distortion/shake
             obj:GetPropertyChangedSignal("Enabled"):Connect(function()
                 if obj.Enabled then
                     obj.Enabled = false
                 end
             end)
-
-            -- Proteção extra para propriedades que causam freeze/shake
-            if obj:IsA("ColorCorrectionEffect") or obj.ClassName == "ColorCorrection" then
+            
+            if obj:IsA("ColorCorrectionEffect") then
                 obj:GetPropertyChangedSignal("Brightness"):Connect(function()
                     if obj.Brightness ~= 0 then obj.Brightness = 0 end
                 end)
@@ -74,7 +59,7 @@ local function NeutralizeLightingAndFilters(obj)
                 end)
             end
         end)
-    elseif obj:IsA("Light") then
+    elseif obj:IsA("Light") then 
         pcall(function()
             obj.Enabled = false
             obj.Brightness = 0
@@ -104,63 +89,52 @@ end
 local function NukeVFX(obj)
     if IsPartOfCharacter(obj) then
         local className = obj.ClassName
-        if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or
+        if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
            className == "Fire" or className == "Smoke" or className == "Sparkles" then
-
-            -- Remove 80% das partículas/efeitos
-            if math.random(1, 100) <= 80 then
-                task.defer(function()
-                    pcall(function() obj:Destroy() end)
+            
+            task.defer(function()
+                pcall(function()
+                    if className == "Trail" then
+                        -- Remove textura, deixa só cor sólida
+                        obj.Texture = ""
+                        obj.Enabled = true -- mantém o trail ativo só com cor
+                    else
+                        -- 100% remoção de partículas
+                        obj:Destroy()
+                    end
                 end)
-            else
-                task.defer(function()
-                    pcall(function()
-                        obj.Enabled = false
-                        if className == "ParticleEmitter" then
-                            obj.Rate = 0
-                            obj.Transparency = NumberSequence.new(1)
-                        elseif className == "Trail" then
-                            -- Remove textura do Trail, deixa só cor sólida
-                            obj.Texture = ""
-                            obj.Transparency = NumberSequence.new(0.5)
-                        end
-                    end)
-                end)
-            end
+            end)
         end
         return
     end
 
     local className = obj.ClassName
-
+    
     if obj:IsA("PostEffect") or obj:IsA("Light") then
         task.defer(NeutralizeLightingAndFilters, obj)
         return
     end
 
-    if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or
+    if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
        className == "Fire" or className == "Smoke" or className == "Sparkles" then
-
-        -- Remove 80% das partículas/efeitos
-        if math.random(1, 100) <= 80 then
-            task.defer(function()
-                pcall(function() obj:Destroy() end)
+        
+        task.defer(function()
+            pcall(function()
+                if className == "Trail" then
+                    -- Remove textura dos trails, deixa só cor sólida permanente
+                    obj.Texture = ""
+                    -- Garante que não volte textura
+                    obj:GetPropertyChangedSignal("Texture"):Connect(function()
+                        if obj.Texture ~= "" then
+                            obj.Texture = ""
+                        end
+                    end)
+                else
+                    -- 100% remoção de partículas / fire / smoke / sparkles / beams
+                    obj:Destroy()
+                end
             end)
-        else
-            task.defer(function()
-                pcall(function()
-                    obj.Enabled = false
-                    if className == "ParticleEmitter" then
-                        obj.Rate = 0
-                        obj.Transparency = NumberSequence.new(1)
-                    elseif className == "Trail" then
-                        -- Remove textura do Trail, deixa só cor sólida
-                        obj.Texture = ""
-                        obj.Transparency = NumberSequence.new(0.5)
-                    end
-                end)
-            end)
-        end
+        end)
     end
 
     if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
@@ -168,7 +142,7 @@ local function NukeVFX(obj)
             pcall(function()
                 if obj:IsA("MeshPart") then
                     obj.TextureID = ""
-                    obj.Material = Enum.Material.Plastic
+                    obj.Material = Enum.Material.SmoothPlastic
                     obj.Reflectance = 0
                     obj.CastShadow = false
                     obj.CanCollide = false
@@ -203,10 +177,12 @@ local function NukeVFX(obj)
         end)
     end
 
-    -- Remove Decals e Textures
+    -- Remove Decals e Textures 100%
     if obj:IsA("Decal") or obj:IsA("Texture") then
         task.defer(function()
-            pcall(function() obj:Destroy() end)
+            pcall(function()
+                obj:Destroy()
+            end)
         end)
     end
 end
@@ -221,7 +197,7 @@ local function CleanStaticObjects()
             pcall(function() obj:Destroy() end)
         elseif obj:IsA("BasePart") then
             pcall(function()
-                obj.Material = Enum.Material.Plastic
+                obj.Material = Enum.Material.SmoothPlastic
                 obj.Reflectance = 0
                 obj.CastShadow = false
             end)
@@ -230,7 +206,7 @@ local function CleanStaticObjects()
         if obj:IsA("MeshPart") then
             pcall(function()
                 obj.TextureID = ""
-                obj.Material = Enum.Material.Plastic
+                obj.Material = Enum.Material.SmoothPlastic
                 obj.Reflectance = 0
                 obj.CastShadow = false
                 obj.CanCollide = false
@@ -258,10 +234,17 @@ local function CleanStaticObjects()
             end)
         end
 
-        -- Remove textura de Trails existentes
+        -- Trails: remove textura, deixa só cor sólida
         if obj:IsA("Trail") then
             pcall(function()
                 obj.Texture = ""
+            end)
+        end
+
+        -- Partículas 100% removidas
+        if obj:IsA("ParticleEmitter") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") or obj:IsA("Beam") then
+            pcall(function()
+                obj:Destroy()
             end)
         end
     end
@@ -274,7 +257,7 @@ local function CleanLightingAndGui()
         Lighting.Brightness = 1
         Lighting.Ambient = Color3.fromRGB(150, 150, 150)
         Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
-
+        
         for _, effect in ipairs(Lighting:GetChildren()) do
             if effect:IsA("Sky") or effect:IsA("Atmosphere") then
                 effect:Destroy()
@@ -352,4 +335,27 @@ RunService.Stepped:Connect(function()
             end
         end
     end)
+end)
+
+-- Loop leve para manter SmoothPlastic permanente e limpeza contínua sem freeze
+task.spawn(function()
+    while true do
+        task.wait(2)
+        pcall(function()
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and not IsPartOfCharacter(obj) then
+                    if obj.Material ~= Enum.Material.SmoothPlastic then
+                        obj.Material = Enum.Material.SmoothPlastic
+                        obj.Reflectance = 0
+                        obj.CastShadow = false
+                    end
+                end
+                if obj:IsA("Trail") then
+                    if obj.Texture ~= "" then
+                        obj.Texture = ""
+                    end
+                end
+            end
+        end)
+    end
 end)
