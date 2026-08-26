@@ -177,8 +177,8 @@ local function NukeVFX(obj)
         end)
     end
 
-    -- Remove Decals e Textures 100%
-    if obj:IsA("Decal") or obj:IsA("Texture") then
+    -- Remove apenas Textures (Decals NÃO são removidos)
+    if obj:IsA("Texture") then
         task.defer(function()
             pcall(function()
                 obj:Destroy()
@@ -193,7 +193,7 @@ local function CleanStaticObjects()
             continue
         end
 
-        if obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SpecialMesh") or obj:IsA("Sky") or obj:IsA("Atmosphere") then
+        if obj:IsA("Texture") or obj:IsA("SpecialMesh") or obj:IsA("Sky") or obj:IsA("Atmosphere") then
             pcall(function() obj:Destroy() end)
         elseif obj:IsA("BasePart") then
             pcall(function()
