@@ -35,29 +35,9 @@ local function NeutralizeLightingAndFilters(obj)
                 obj.FarIntensity = 0
             end
 
-            -- Previne reativação e bugs de freeze/distortion/shake
             obj:GetPropertyChangedSignal("Enabled"):Connect(function()
-                if obj.Enabled then
-                    obj.Enabled = false
-                end
+                if obj.Enabled then obj.Enabled = false end
             end)
-            
-            if obj:IsA("ColorCorrectionEffect") then
-                obj:GetPropertyChangedSignal("Brightness"):Connect(function()
-                    if obj.Brightness ~= 0 then obj.Brightness = 0 end
-                end)
-                obj:GetPropertyChangedSignal("Contrast"):Connect(function()
-                    if obj.Contrast ~= 0 then obj.Contrast = 0 end
-                end)
-                obj:GetPropertyChangedSignal("Saturation"):Connect(function()
-                    if obj.Saturation ~= 0 then obj.Saturation = 0 end
-                end)
-                obj:GetPropertyChangedSignal("TintColor"):Connect(function()
-                    if obj.TintColor ~= Color3.new(1, 1, 1) then
-                        obj.TintColor = Color3.new(1, 1, 1)
-                    end
-                end)
-            end
         end)
     elseif obj:IsA("Light") then 
         pcall(function()
@@ -86,24 +66,49 @@ local function IsPartOfCharacter(obj)
     return false
 end
 
+local function HandleSound(obj)
+    if not obj:IsA("Sound") then return end
+    task.defer(function()
+        pcall(function()
+            -- Qualquer som é removido após 5 segundos se ainda existir (resolve freeze/loop)
+            -- Sons curtos (<5s) tocam normalmente e já acabam sozinhos
+            task.wait(5)
+            if obj and obj.Parent then
+                obj:Stop()
+                obj.Looped = false
+                obj.Volume = 0
+                obj:Destroy()
+            end
+        end)
+    end)
+end
+
 local function NukeVFX(obj)
     if IsPartOfCharacter(obj) then
         local className = obj.ClassName
         if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
            className == "Fire" or className == "Smoke" or className == "Sparkles" then
             
-            task.defer(function()
-                pcall(function()
-                    if className == "Trail" then
-                        -- Remove textura, deixa só cor sólida
-                        obj.Texture = ""
-                        obj.Enabled = true -- mantém o trail ativo só com cor
-                    else
-                        -- 100% remoção de partículas
-                        obj:Destroy()
-                    end
+            if math.random(1, 100) <= 90 then
+                task.defer(function()
+                    pcall(function() obj:Destroy() end)
                 end)
-            end)
+            else
+                task.defer(function()
+                    pcall(function()
+                        obj.Enabled = false
+                        if className == "ParticleEmitter" then
+                            obj.Rate = 0
+                            obj.Transparency = NumberSequence.new(1)
+                        end
+                    end)
+                end)
+            end
+        end
+        
+        -- Sons do personagem (seu ou de outros players)
+        if obj:IsA("Sound") then
+            HandleSound(obj)
         end
         return
     end
@@ -118,37 +123,46 @@ local function NukeVFX(obj)
     if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
        className == "Fire" or className == "Smoke" or className == "Sparkles" then
         
+        if math.random(1, 100) <= 90 then
+            task.defer(function()
+                pcall(function() obj:Destroy() end)
+            end)
+        else
+            task.defer(function()
+                pcall(function()
+                    obj.Enabled = false
+                    if className == "ParticleEmitter" then
+                        obj.Rate = 0
+                        obj.Transparency = NumberSequence.new(1)
+                    end
+                end)
+            end)
+        end
+    end
+
+    -- Só remove texturas, deixa a cor sólida
+    if obj:IsA("MeshPart") then
         task.defer(function()
             pcall(function()
-                if className == "Trail" then
-                    -- Remove textura dos trails, deixa só cor sólida permanente
-                    obj.Texture = ""
-                    -- Garante que não volte textura
-                    obj:GetPropertyChangedSignal("Texture"):Connect(function()
-                        if obj.Texture ~= "" then
-                            obj.Texture = ""
-                        end
-                    end)
-                else
-                    -- 100% remoção de partículas / fire / smoke / sparkles / beams
-                    obj:Destroy()
+                obj.TextureID = ""
+                obj.Material = Enum.Material.Plastic
+                obj.Reflectance = 0
+                obj.CastShadow = false
+            end)
+        end)
+    elseif obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
+        task.defer(function()
+            pcall(function()
+                if obj:IsA("SpecialMesh") then
+                    obj.TextureId = ""
                 end
             end)
         end)
     end
 
-    if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
+    if obj:IsA("Decal") or obj:IsA("Texture") then
         task.defer(function()
             pcall(function()
-                if obj:IsA("MeshPart") then
-                    obj.TextureID = ""
-                    obj.Material = Enum.Material.SmoothPlastic
-                    obj.Reflectance = 0
-                    obj.CastShadow = false
-                    obj.CanCollide = false
-                    obj.CanQuery = false
-                    obj.CanTouch = false
-                end
                 obj:Destroy()
             end)
         end)
@@ -166,38 +180,30 @@ local function NukeVFX(obj)
         end)
     end
 
-    if obj:IsA("Sound") and obj.Looped then
-        task.defer(function()
-            pcall(function()
-                obj:Stop()
-                obj.Looped = false
-                obj.Volume = 0
-                obj:Destroy()
-            end)
-        end)
-    end
-
-    -- Remove apenas Textures (Decals NÃO são removidos)
-    if obj:IsA("Texture") then
-        task.defer(function()
-            pcall(function()
-                obj:Destroy()
-            end)
-        end)
+    -- Qualquer som (não só looped)
+    if obj:IsA("Sound") then
+        HandleSound(obj)
     end
 end
 
 local function CleanStaticObjects()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if IsPartOfCharacter(obj) then
+            -- Ainda processa sons dos personagens
+            if obj:IsA("Sound") then
+                HandleSound(obj)
+            end
             continue
         end
 
-        if obj:IsA("Texture") or obj:IsA("SpecialMesh") or obj:IsA("Sky") or obj:IsA("Atmosphere") then
+        -- Só remove texturas / decals, deixa cor sólida
+        if obj:IsA("Decal") or obj:IsA("Texture") then
+            pcall(function() obj:Destroy() end)
+        elseif obj:IsA("Sky") or obj:IsA("Atmosphere") then
             pcall(function() obj:Destroy() end)
         elseif obj:IsA("BasePart") then
             pcall(function()
-                obj.Material = Enum.Material.SmoothPlastic
+                obj.Material = Enum.Material.Plastic
                 obj.Reflectance = 0
                 obj.CastShadow = false
             end)
@@ -206,13 +212,15 @@ local function CleanStaticObjects()
         if obj:IsA("MeshPart") then
             pcall(function()
                 obj.TextureID = ""
-                obj.Material = Enum.Material.SmoothPlastic
+                obj.Material = Enum.Material.Plastic
                 obj.Reflectance = 0
                 obj.CastShadow = false
-                obj.CanCollide = false
-                obj.CanQuery = false
-                obj.CanTouch = false
-                obj:Destroy()
+            end)
+        elseif obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
+            pcall(function()
+                if obj:IsA("SpecialMesh") then
+                    obj.TextureId = ""
+                end
             end)
         end
 
@@ -225,27 +233,9 @@ local function CleanStaticObjects()
             end)
         end
 
-        if obj:IsA("Sound") and obj.Looped then
-            pcall(function()
-                obj:Stop()
-                obj.Looped = false
-                obj.Volume = 0
-                obj:Destroy()
-            end)
-        end
-
-        -- Trails: remove textura, deixa só cor sólida
-        if obj:IsA("Trail") then
-            pcall(function()
-                obj.Texture = ""
-            end)
-        end
-
-        -- Partículas 100% removidas
-        if obj:IsA("ParticleEmitter") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") or obj:IsA("Beam") then
-            pcall(function()
-                obj:Destroy()
-            end)
+        -- Qualquer som
+        if obj:IsA("Sound") then
+            HandleSound(obj)
         end
     end
 end
