@@ -6,26 +6,30 @@ local SoundService = game:GetService("SoundService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Força gráficos no nível 1 (Lite / Potato) permanentemente
+-- Força gráficos Potato / Lite (Quality 1) de forma mais agressiva e permanente
 local function ForceLowGraphics()
 	pcall(function()
-		local UserGameSettings = UserSettings():GetService("UserGameSettings")
-		UserGameSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+		local ugs = UserSettings():GetService("UserGameSettings")
+		ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
 	end)
 
 	pcall(function()
 		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 	end)
+
+	-- Extra force (ajuda em alguns jogos)
+	pcall(function()
+		settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
+	end)
 end
 
--- Aplica imediatamente
 ForceLowGraphics()
 
--- Mantém forçado o tempo todo (não deixa voltar)
+-- Mantém forçado o tempo todo
 task.spawn(function()
 	while true do
 		ForceLowGraphics()
-		task.wait(1)
+		task.wait(0.5)
 	end
 end)
 
@@ -99,8 +103,27 @@ local function SafeDestroySound(sound)
 	end)
 end
 
+local function StripTrail(trail)
+	pcall(function()
+		if trail and trail.Parent then
+			trail.Texture = ""
+			trail.TextureMode = Enum.TextureMode.Stretch
+			trail.TextureLength = 1
+			-- Mantém só cor sólida (remove textura)
+		end
+	end)
+end
+
 local function NukeVFX(obj)
 	if not obj or not obj.Parent then
+		return
+	end
+
+	-- Trails: tira textura, deixa só cor sólida (em qualquer lugar, inclusive personagem)
+	if obj:IsA("Trail") then
+		task.defer(function()
+			StripTrail(obj)
+		end)
 		return
 	end
 
@@ -109,6 +132,11 @@ local function NukeVFX(obj)
 		if className == "ParticleEmitter" or className == "Beam" or className == "Fire" or className == "Smoke" or className == "Sparkles" then
 			task.defer(function()
 				pcall(function()
+					if obj:IsA("ParticleEmitter") then
+						obj.Rate = 0
+						obj.Enabled = false
+						obj.Transparency = NumberSequence.new(1)
+					end
 					obj:Destroy()
 				end)
 			end)
@@ -126,6 +154,14 @@ local function NukeVFX(obj)
 	if className == "ParticleEmitter" or className == "Beam" or className == "Fire" or className == "Smoke" or className == "Sparkles" then
 		task.defer(function()
 			pcall(function()
+				if obj:IsA("ParticleEmitter") then
+					obj.Rate = 0
+					obj.Enabled = false
+					obj.Transparency = NumberSequence.new(1)
+				elseif obj:IsA("Beam") then
+					obj.Enabled = false
+					obj.Transparency = NumberSequence.new(1)
+				end
 				obj:Destroy()
 			end)
 		end)
@@ -156,7 +192,7 @@ local function NukeVFX(obj)
 		return
 	end
 
-	-- Peças soltas (corrigido precedência de operadores)
+	-- Peças soltas
 	if obj:IsA("BasePart") and not obj:IsA("MeshPart") then
 		local parent = obj.Parent
 		local isLooseParent = parent == Workspace
@@ -175,7 +211,7 @@ local function NukeVFX(obj)
 		return
 	end
 
-	-- Sons loopados / congelados (não destrói sons de personagem)
+	-- Sons loopados / congelados
 	if obj:IsA("Sound") then
 		if obj.Looped or (obj.IsPlaying and obj.TimeLength > 0 and obj.TimePosition > 0) then
 			task.defer(function()
@@ -187,6 +223,11 @@ end
 
 local function CleanStaticObjects()
 	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("Trail") then
+			StripTrail(obj)
+			continue
+		end
+
 		if IsPartOfCharacter(obj) then
 			continue
 		end
@@ -207,6 +248,14 @@ local function CleanStaticObjects()
 			end)
 		elseif obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
 			pcall(function()
+				if obj:IsA("ParticleEmitter") then
+					obj.Rate = 0
+					obj.Enabled = false
+					obj.Transparency = NumberSequence.new(1)
+				elseif obj:IsA("Beam") then
+					obj.Enabled = false
+					obj.Transparency = NumberSequence.new(1)
+				end
 				obj:Destroy()
 			end)
 		elseif obj:IsA("BasePart") and not obj:IsA("MeshPart") then
@@ -229,7 +278,7 @@ local function CleanStaticObjects()
 		end
 	end
 
-	-- Limpa também sons presos no SoundService
+	-- Limpa sons no SoundService
 	for _, obj in ipairs(SoundService:GetDescendants()) do
 		if obj:IsA("Sound") and (obj.Looped or obj.IsPlaying) then
 			SafeDestroySound(obj)
@@ -270,18 +319,23 @@ task.spawn(function()
 	CleanLightingAndGui()
 end)
 
--- Limpeza periódica de sons (evita acúmulo)
+-- Limpeza periódica de sons + força gráficos
 task.spawn(function()
 	while true do
-		task.wait(8)
+		task.wait(6)
 		pcall(function()
+			ForceLowGraphics()
+
 			for _, obj in ipairs(Workspace:GetDescendants()) do
-				if obj:IsA("Sound") and not IsPartOfCharacter(obj) then
+				if obj:IsA("Trail") then
+					StripTrail(obj)
+				elseif obj:IsA("Sound") and not IsPartOfCharacter(obj) then
 					if obj.Looped or (obj.IsPlaying and obj.Volume > 0) then
 						SafeDestroySound(obj)
 					end
 				end
 			end
+
 			for _, obj in ipairs(SoundService:GetDescendants()) do
 				if obj:IsA("Sound") and (obj.Looped or obj.IsPlaying) then
 					SafeDestroySound(obj)
