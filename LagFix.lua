@@ -336,26 +336,3 @@ RunService.Stepped:Connect(function()
         end
     end)
 end)
-
--- Loop leve para manter SmoothPlastic permanente e limpeza contínua sem freeze
-task.spawn(function()
-    while true do
-        task.wait(2)
-        pcall(function()
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and not IsPartOfCharacter(obj) then
-                    if obj.Material ~= Enum.Material.SmoothPlastic then
-                        obj.Material = Enum.Material.SmoothPlastic
-                        obj.Reflectance = 0
-                        obj.CastShadow = false
-                    end
-                end
-                if obj:IsA("Trail") then
-                    if obj.Texture ~= "" then
-                        obj.Texture = ""
-                    end
-                end
-            end
-        end)
-    end
-end)
