@@ -6,8 +6,27 @@ local SoundService = game:GetService("SoundService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
-pcall(function()
-	UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+-- Força gráficos no nível 1 (Lite / Potato) permanentemente
+local function ForceLowGraphics()
+	pcall(function()
+		local UserGameSettings = UserSettings():GetService("UserGameSettings")
+		UserGameSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+	end)
+
+	pcall(function()
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+	end)
+end
+
+-- Aplica imediatamente
+ForceLowGraphics()
+
+-- Mantém forçado o tempo todo (não deixa voltar)
+task.spawn(function()
+	while true do
+		ForceLowGraphics()
+		task.wait(1)
+	end
 end)
 
 local function NeutralizeLightingAndFilters(obj)
