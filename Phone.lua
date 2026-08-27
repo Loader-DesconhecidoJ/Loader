@@ -1,6 +1,3 @@
--- =========================================================
--- PROTEÇÃO CONTRA NIL
--- =========================================================
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
@@ -1736,231 +1733,150 @@ StopwatchAppIcon.MouseButton1Click:Connect(openStopwatchApp)
 ConfigAppIcon.MouseButton1Click:Connect(openConfigApp)
 GalleryAppIcon.MouseButton1Click:Connect(openGalleryApp)
 
--- ========== BOOT ANIMATION (primeira vez) ==========
-local BootScreen = Instance.new("Frame")
-BootScreen.Name = "BootScreen"
-BootScreen.Size = UDim2.new(0, 280, 0, 440)
-BootScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-BootScreen.BorderSizePixel = 0
-BootScreen.Visible = false
-BootScreen.ZIndex = 50
-BootScreen.Parent = ScreenGui
-Instance.new("UICorner", BootScreen).CornerRadius = UDim.new(0, 28)
-
-local bootBezel = Instance.new("UIStroke")
-bootBezel.Color = Color3.fromRGB(50, 205, 50)
-bootBezel.Thickness = 6
-bootBezel.Parent = BootScreen
-
-local bootEars = Instance.new("ImageLabel")
-bootEars.Size = UDim2.new(0, 340, 0, 95)
-bootEars.Position = UDim2.new(0.5, -170, 0, -48)
-bootEars.BackgroundTransparency = 1
-bootEars.Image = "rbxassetid://108135642658853"
-bootEars.ImageColor3 = Color3.fromRGB(50, 205, 50)
-bootEars.ZIndex = 51
-bootEars.Parent = BootScreen
-
-local bootNotch = Instance.new("Frame")
-bootNotch.Size = UDim2.new(0, 82, 0, 24)
-bootNotch.Position = UDim2.new(0.5, -41, 0, 9)
-bootNotch.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-bootNotch.BorderSizePixel = 0
-bootNotch.ZIndex = 52
-bootNotch.Parent = BootScreen
-Instance.new("UICorner", bootNotch).CornerRadius = UDim.new(1, 0)
-
-local bootLogo = Instance.new("TextLabel")
-bootLogo.Name = "BootLogo"
-bootLogo.Size = UDim2.new(0, 120, 0, 120)
-bootLogo.Position = UDim2.new(0.5, -60, 0.5, -90)
-bootLogo.BackgroundTransparency = 1
-bootLogo.Text = "📱"
-bootLogo.TextSize = 72
-bootLogo.TextTransparency = 1
-bootLogo.ZIndex = 53
-bootLogo.Parent = BootScreen
-
-local bootTitle = Instance.new("TextLabel")
-bootTitle.Name = "BootTitle"
-bootTitle.Size = UDim2.new(1, -40, 0, 36)
-bootTitle.Position = UDim2.new(0, 20, 0.5, 30)
-bootTitle.BackgroundTransparency = 1
-bootTitle.Text = "Tze Phone"
-bootTitle.TextColor3 = Color3.fromRGB(50, 205, 50)
-bootTitle.Font = Enum.Font.GothamBold
-bootTitle.TextSize = 26
-bootTitle.TextTransparency = 1
-bootTitle.ZIndex = 53
-bootTitle.Parent = BootScreen
-
-local bootSub = Instance.new("TextLabel")
-bootSub.Name = "BootSub"
-bootSub.Size = UDim2.new(1, -40, 0, 22)
-bootSub.Position = UDim2.new(0, 20, 0.5, 64)
-bootSub.BackgroundTransparency = 1
-bootSub.Text = "Iniciando..."
-bootSub.TextColor3 = Color3.fromRGB(180, 180, 190)
-bootSub.Font = Enum.Font.Gotham
-bootSub.TextSize = 14
-bootSub.TextTransparency = 1
-bootSub.ZIndex = 53
-bootSub.Parent = BootScreen
-
--- Loading dots
-local bootDotsFrame = Instance.new("Frame")
-bootDotsFrame.Size = UDim2.new(0, 60, 0, 12)
-bootDotsFrame.Position = UDim2.new(0.5, -30, 0.5, 100)
-bootDotsFrame.BackgroundTransparency = 1
-bootDotsFrame.ZIndex = 53
-bootDotsFrame.Parent = BootScreen
-
-local bootDots = {}
-for i = 1, 3 do
-    local dot = Instance.new("Frame")
-    dot.Size = UDim2.new(0, 8, 0, 8)
-    dot.Position = UDim2.new(0, (i - 1) * 20, 0.5, -4)
-    dot.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-    dot.BackgroundTransparency = 0.7
-    dot.BorderSizePixel = 0
-    dot.ZIndex = 54
-    dot.Parent = bootDotsFrame
-    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-    bootDots[i] = dot
-end
-
-local isBooting = false
-local hasPlayedBootThisSession = false -- reseta toda vez que o script é executado
-
-local function playBootAnimation(onComplete)
-    isBooting = true
-    BootScreen.Position = UDim2.new(1, -300, 1, 80)
-    BootScreen.Visible = true
-    BootScreen.BackgroundTransparency = 0
-    bootLogo.TextTransparency = 1
-    bootTitle.TextTransparency = 1
-    bootSub.TextTransparency = 1
-    for _, d in ipairs(bootDots) do
-        d.BackgroundTransparency = 0.7
-        d.Size = UDim2.new(0, 8, 0, 8)
-    end
-
-    local target = UDim2.new(phoneSettings.phonePosition.X, phoneSettings.phonePosition.XOffset, phoneSettings.phonePosition.Y, phoneSettings.phonePosition.YOffset)
-
-    -- Slide in
-    local slideIn = TweenService:Create(BootScreen, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = target})
-    slideIn:Play()
-    slideIn.Completed:Wait()
-
-    -- Fade in logo + title
-    TweenService:Create(bootLogo, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
-    task.wait(0.18)
-    TweenService:Create(bootTitle, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
-    task.wait(0.12)
-    TweenService:Create(bootSub, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
-
-    -- Animate dots
-    local dotsRunning = true
-    task.spawn(function()
-        local idx = 1
-        while dotsRunning do
-            for i, d in ipairs(bootDots) do
-                local isActive = (i == idx)
-                TweenService:Create(d, TweenInfo.new(0.18), {
-                    BackgroundTransparency = isActive and 0 or 0.7,
-                    Size = isActive and UDim2.new(0, 10, 0, 10) or UDim2.new(0, 8, 0, 8)
-                }):Play()
-            end
-            idx = idx % 3 + 1
-            task.wait(0.28)
-        end
-    end)
-
-    task.wait(1.65)
-    dotsRunning = false
-
-    -- Fade everything out
-    local fadeInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-    TweenService:Create(bootLogo, fadeInfo, {TextTransparency = 1}):Play()
-    TweenService:Create(bootTitle, fadeInfo, {TextTransparency = 1}):Play()
-    TweenService:Create(bootSub, fadeInfo, {TextTransparency = 1}):Play()
-    for _, d in ipairs(bootDots) do
-        TweenService:Create(d, fadeInfo, {BackgroundTransparency = 1}):Play()
-    end
-    task.wait(0.42)
-
-    -- Soft fade of the black screen
-    TweenService:Create(BootScreen, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
-    task.wait(0.32)
-
-    BootScreen.Visible = false
-    BootScreen.BackgroundTransparency = 0
-    isBooting = false
-
-    if onComplete then
-        onComplete()
-    end
-end
-
 -- ========== OPEN / CLOSE PHONE ==========
+-- Animação: Slide Vertical + Bounce + Fade In/Out (liga/desliga)
+
+local function setPhoneFade(frame, transparency)
+    if not frame then return end
+    frame.BackgroundTransparency = transparency
+    for _, child in ipairs(frame:GetDescendants()) do
+        if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+            child.ImageTransparency = transparency
+        elseif child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+            child.TextTransparency = transparency
+            if child:IsA("TextButton") or child:IsA("TextBox") then
+                child.BackgroundTransparency = math.clamp(transparency + 0.15, 0, 1)
+            end
+        elseif child:IsA("Frame") and child.Name ~= "NavBar" then
+            if child.BackgroundTransparency < 1 then
+                child.BackgroundTransparency = math.clamp(transparency + (child.BackgroundTransparency or 0), 0, 1)
+            end
+        elseif child:IsA("UIStroke") then
+            child.Transparency = transparency
+        end
+    end
+    -- NavBar e Volume especiais
+    local nav = frame:FindFirstChild("NavBar")
+    if nav then
+        nav.BackgroundTransparency = math.clamp(0.4 + transparency * 0.6, 0, 1)
+        for _, c in ipairs(nav:GetDescendants()) do
+            if c:IsA("TextLabel") or c:IsA("TextButton") then
+                c.TextTransparency = transparency
+            end
+        end
+    end
+end
+
 local function closePhone()
-    if isBooting then return end
     isInPhotoViewer = false
     exitPhotoViewer()
-    local target = UDim2.new(1, -300, 1, 80)
-    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame, BootScreen}
+    local target = UDim2.new(1, -300, 1, 120) -- slide vertical para baixo
+    local frames = {PhoneHome, MainFrame, StopwatchFrame, ConfigFrame, GalleryFrame}
+    local anyVisible = false
+
     for _, f in ipairs(frames) do
         if f.Visible then
-            local tween = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = target})
-            tween:Play()
-            tween.Completed:Once(function()
+            anyVisible = true
+            -- Fade-out + Slide Vertical + Bounce (saída)
+            local tweenPos = TweenService:Create(f, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                Position = target
+            })
+            local tweenFade = TweenService:Create(f, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                BackgroundTransparency = 1
+            })
+
+            -- Fade de todos os filhos
+            for _, child in ipairs(f:GetDescendants()) do
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    TweenService:Create(child, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {ImageTransparency = 1}):Play()
+                elseif child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    TweenService:Create(child, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1}):Play()
+                elseif child:IsA("UIStroke") then
+                    TweenService:Create(child, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Transparency = 1}):Play()
+                end
+            end
+
+            tweenPos:Play()
+            tweenFade:Play()
+
+            tweenPos.Completed:Once(function()
                 f.Visible = false
+                -- Restaura transparências para próximo open
+                setPhoneFade(f, 0)
             end)
         end
     end
+
+    -- Volume também some
+    if VolumeFrame.Visible then
+        TweenService:Create(VolumeFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            BackgroundTransparency = 1
+        }):Play()
+        task.delay(0.35, function()
+            VolumeFrame.Visible = false
+            VolumeFrame.BackgroundTransparency = 0.15
+        end)
+    end
+
     isPhoneOpen = false
     isMusicOpen = false
     currentApp = "home"
     selectedFrame.Visible = false
 end
 
-local function openPhoneNormal()
+local function openPhone()
     isPhoneOpen = true
     openHomeScreen()
-    PhoneHome.Position = UDim2.new(1, -300, 1, 80)
+
+    local startPos = UDim2.new(1, -300, 1, 120) -- começa de baixo
+    local target = UDim2.new(
+        phoneSettings.phonePosition.X,
+        phoneSettings.phonePosition.XOffset,
+        phoneSettings.phonePosition.Y,
+        phoneSettings.phonePosition.YOffset
+    )
+
+    PhoneHome.Position = startPos
     PhoneHome.Visible = true
-    local target = UDim2.new(phoneSettings.phonePosition.X, phoneSettings.phonePosition.XOffset, phoneSettings.phonePosition.Y, phoneSettings.phonePosition.YOffset)
-    local tween = TweenService:Create(PhoneHome, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = target})
-    tween:Play()
-    attachVolumeTo(PhoneHome)
-    selectedFrame.Visible = true
-end
 
-local function openPhone()
-    if isBooting then return end
+    -- Começa totalmente transparente (apagado)
+    setPhoneFade(PhoneHome, 1)
+    PhoneHome.BackgroundTransparency = 1
 
-    -- Sempre na primeira abertura após executar o script
-    if not hasPlayedBootThisSession then
-        isPhoneOpen = true
-        selectedFrame.Visible = true
-        hasPlayedBootThisSession = true
+    -- Fade-in (ligando) + Slide Vertical + Bounce
+    local tweenPos = TweenService:Create(PhoneHome, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = target
+    })
+    local tweenFade = TweenService:Create(PhoneHome, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0
+    })
 
-        -- Prepara a home escondida por baixo
-        openHomeScreen()
-        PhoneHome.Visible = false
-
-        task.spawn(function()
-            playBootAnimation(function()
-                -- Depois do boot, revela a home
-                PhoneHome.Position = UDim2.new(phoneSettings.phonePosition.X, phoneSettings.phonePosition.XOffset, phoneSettings.phonePosition.Y, phoneSettings.phonePosition.YOffset)
-                PhoneHome.Visible = true
-                attachVolumeTo(PhoneHome)
-            end)
-        end)
-        return
+    -- Fade-in de todos os elementos
+    for _, child in ipairs(PhoneHome:GetDescendants()) do
+        if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+            child.ImageTransparency = 1
+            TweenService:Create(child, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+        elseif child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+            child.TextTransparency = 1
+            TweenService:Create(child, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+        elseif child:IsA("UIStroke") then
+            child.Transparency = 1
+            TweenService:Create(child, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0}):Play()
+        end
     end
 
-    openPhoneNormal()
+    tweenPos:Play()
+    tweenFade:Play()
+
+    -- Volume aparece com fade
+    VolumeFrame.BackgroundTransparency = 1
+    attachVolumeTo(PhoneHome)
+    VolumeFrame.Visible = true
+    TweenService:Create(VolumeFrame, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.15
+    }):Play()
+
+    selectedFrame.Visible = true
 end
 
 local function togglePhone()
