@@ -36,10 +36,12 @@ local function NeutralizeLightingAndFilters(obj)
             end
 
             obj:GetPropertyChangedSignal("Enabled"):Connect(function()
-                if obj.Enabled then obj.Enabled = false end
+                if obj.Enabled then
+                    obj.Enabled = false
+                end
             end)
         end)
-    elseif obj:IsA("Light") then 
+    elseif obj:IsA("Light") then
         pcall(function()
             obj.Enabled = false
             obj.Brightness = 0
@@ -67,7 +69,9 @@ local function IsPartOfCharacter(obj)
 end
 
 local function HandleSound(obj)
-    if not obj:IsA("Sound") then return end
+    if not obj:IsA("Sound") then
+        return
+    end
     task.defer(function()
         pcall(function()
             -- Qualquer som é removido após 5 segundos se ainda existir (resolve freeze/loop)
@@ -83,15 +87,36 @@ local function HandleSound(obj)
     end)
 end
 
+-- Remove apenas a textura de Trail/Beam e deixa cor sólida (não destrói)
+local function CleanTrailOrBeam(obj)
+    if not (obj:IsA("Trail") or obj:IsA("Beam")) then
+        return
+    end
+    task.defer(function()
+        pcall(function()
+            obj.Texture = ""
+            -- Cor sólida (pega a primeira keypoint se existir, senão branco)
+            local solidColor = Color3.new(1, 1, 1)
+            if obj.Color and typeof(obj.Color) == "ColorSequence" and #obj.Color.Keypoints > 0 then
+                solidColor = obj.Color.Keypoints[1].Value
+            end
+            obj.Color = ColorSequence.new(solidColor)
+        end)
+    end)
+end
+
+-- NukeVFX = objetos NOVOS (habilidades, guns, swords, fruits, VFX, etc)
+-- Aqui MeshPart e SpecialMesh são SEMPRE destruídos para não ficarem presos no mapa
 local function NukeVFX(obj)
     if IsPartOfCharacter(obj) then
         local className = obj.ClassName
-        if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
-           className == "Fire" or className == "Smoke" or className == "Sparkles" then
+        if className == "ParticleEmitter" or className == "Fire" or className == "Smoke" or className == "Sparkles" then
             
             if math.random(1, 100) <= 90 then
                 task.defer(function()
-                    pcall(function() obj:Destroy() end)
+                    pcall(function()
+                        obj:Destroy()
+                    end)
                 end)
             else
                 task.defer(function()
@@ -106,9 +131,13 @@ local function NukeVFX(obj)
             end
         end
         
-        -- Sons do personagem (seu ou de outros players)
         if obj:IsA("Sound") then
             HandleSound(obj)
+        end
+        
+        -- Trail / Beam em personagem: só remove textura + cor sólida
+        if obj:IsA("Trail") or obj:IsA("Beam") then
+            CleanTrailOrBeam(obj)
         end
         return
     end
@@ -120,12 +149,13 @@ local function NukeVFX(obj)
         return
     end
 
-    if className == "ParticleEmitter" or className == "Trail" or className == "Beam" or 
-       className == "Fire" or className == "Smoke" or className == "Sparkles" then
+    if className == "ParticleEmitter" or className == "Fire" or className == "Smoke" or className == "Sparkles" then
         
         if math.random(1, 100) <= 90 then
             task.defer(function()
-                pcall(function() obj:Destroy() end)
+                pcall(function()
+                    obj:Destroy()
+                end)
             end)
         else
             task.defer(function()
@@ -140,22 +170,11 @@ local function NukeVFX(obj)
         end
     end
 
-    -- Só remove texturas, deixa a cor sólida
-    if obj:IsA("MeshPart") then
+    -- MeshPart / SpecialMesh / FileMesh SPAWNADOS (habilidades, armas, fruits etc) → SEMPRE destroi
+    if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
         task.defer(function()
             pcall(function()
-                obj.TextureID = ""
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
-            end)
-        end)
-    elseif obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
-        task.defer(function()
-            pcall(function()
-                if obj:IsA("SpecialMesh") then
-                    obj.TextureId = ""
-                end
+                obj:Destroy()
             end)
         end)
     end
@@ -180,27 +199,39 @@ local function NukeVFX(obj)
         end)
     end
 
-    -- Qualquer som (não só looped)
     if obj:IsA("Sound") then
         HandleSound(obj)
     end
+    
+    -- Trail / Beam novos: só remove textura + cor sólida (NÃO destrói)
+    if obj:IsA("Trail") or obj:IsA("Beam") then
+        CleanTrailOrBeam(obj)
+    end
 end
 
+-- Limpeza inicial do mapa (objetos que JÁ existem)
+-- Aqui MeshPart e SpecialMesh são 100% destruídos
 local function CleanStaticObjects()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if IsPartOfCharacter(obj) then
-            -- Ainda processa sons dos personagens
             if obj:IsA("Sound") then
                 HandleSound(obj)
+            end
+            -- Trail / Beam em personagem já existente
+            if obj:IsA("Trail") or obj:IsA("Beam") then
+                CleanTrailOrBeam(obj)
             end
             continue
         end
 
-        -- Só remove texturas / decals, deixa cor sólida
         if obj:IsA("Decal") or obj:IsA("Texture") then
-            pcall(function() obj:Destroy() end)
+            pcall(function()
+                obj:Destroy()
+            end)
         elseif obj:IsA("Sky") or obj:IsA("Atmosphere") then
-            pcall(function() obj:Destroy() end)
+            pcall(function()
+                obj:Destroy()
+            end)
         elseif obj:IsA("BasePart") then
             pcall(function()
                 obj.Material = Enum.Material.Plastic
@@ -209,17 +240,20 @@ local function CleanStaticObjects()
             end)
         end
 
+        -- MeshPart estático: 100% destroi
         if obj:IsA("MeshPart") then
             pcall(function()
-                obj.TextureID = ""
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
+                obj:Destroy()
             end)
-        elseif obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
+        -- SpecialMesh estático: 100% destroi
+        elseif obj:IsA("SpecialMesh") then
             pcall(function()
-                if obj:IsA("SpecialMesh") then
-                    obj.TextureId = ""
+                obj:Destroy()
+            end)
+        elseif obj:IsA("FileMesh") then
+            pcall(function()
+                if math.random(1, 100) <= 50 then
+                    obj:Destroy()
                 end
             end)
         end
@@ -233,9 +267,13 @@ local function CleanStaticObjects()
             end)
         end
 
-        -- Qualquer som
         if obj:IsA("Sound") then
             HandleSound(obj)
+        end
+        
+        -- Trail / Beam estáticos: só remove textura + cor sólida (NÃO destrói)
+        if obj:IsA("Trail") or obj:IsA("Beam") then
+            CleanTrailOrBeam(obj)
         end
     end
 end
@@ -276,9 +314,12 @@ Workspace.DescendantAdded:Connect(NukeVFX)
 Lighting.DescendantAdded:Connect(NukeVFX)
 
 if Camera then
-    for _, obj in ipairs(Camera:GetDescendants()) do NukeVFX(obj) end
+    for _, obj in ipairs(Camera:GetDescendants()) do
+        NukeVFX(obj)
+    end
     Camera.DescendantAdded:Connect(NukeVFX)
 end
+
 Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
     local newCam = Workspace.CurrentCamera
     if newCam then
@@ -291,6 +332,7 @@ Players.PlayerAdded:Connect(function(player)
         char.DescendantAdded:Connect(NukeVFX)
     end)
 end)
+
 for _, player in ipairs(Players:GetPlayers()) do
     if player.Character then
         player.Character.DescendantAdded:Connect(NukeVFX)
