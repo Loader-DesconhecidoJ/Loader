@@ -1,0 +1,2954 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local rad, sin, cos, clamp = math.rad, math.sin, math.cos, math.clamp
+
+-- =======================================================================
+-- ESTADO
+-- =======================================================================
+local SMOOTH_FACTOR = 0.25
+local loopConnectionRender = nil
+local loopConnectionStepped = nil
+
+local typingMode = false
+local typingTimer = 0
+local currentEmote = nil
+local emoteTimer = 0
+local emoteDuration = 3
+
+local apontarCamera = false
+local APONTAR_MAX_YAW = 90 -- limite esquerda/direita (graus)
+local APONTAR_MAX_PITCH = 90 -- limite cima/baixo (graus)
+
+local freezeEmote = false
+
+local animConfig = {
+	direita = true,
+	esquerda = true,
+	torso = false,
+	cabeca = false,
+	pernas = false,
+}
+
+local WHEEL_KEY = Enum.KeyCode.G
+
+-- emotes que deixam o boneco parado (sem andar/pular/girar)
+-- emotes que ligam/desligam (ficam até você tocar de novo)
+local EMOTES_TOGGLE = { Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+
+local EMOTES_IMOVEIS = { Sentido = true, Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+
+-- emotes que mexem no corpo todo (HipHeight/PlatformStand/travas) e precisam de limpeza ao sair
+local EMOTES_CORPO = { Bow = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+
+-- emotes que só abaixam o boneco (HipHeight), sem PlatformStand nem travas de física.
+-- valor = HipHeight usado. Ajuste aqui se o boneco ficar afundado ou flutuando.
+-- Sentar: bumbum no chão (-1.5). Dormir / Dormir2: torso deitado rente ao chão (-2.5).
+local EMOTES_BAIXOS = { Sentar = -1.5, Ajoelhar = -1.2, Dormir = -2.5, Dormir2 = -2.5 }
+
+-- DORMIR (emote Dormir): Zzz animados saindo da cabeça (só aparecem no seu cliente)
+local DORMIR = {
+	emotes = { Dormir = true, Dormir2 = true },
+	zzzQtd = 3,
+	zzzTempo = 3.2,      -- segundos que cada Z leva pra subir e sumir
+	zzzAltura = 3.5,     -- quanto sobem (studs)
+	zzzTamanho = 1.6,    -- tamanho final (studs)
+	zzzCor = Color3.fromRGB(190, 220, 255),
+	zzzContorno = Color3.fromRGB(45, 75, 150),
+}
+
+-- vai e vem do emote Citação (braço direito)
+local CITACAO_AMP = 0.3 -- distância do movimento (studs)
+local CITACAO_VEL = 6   -- velocidade (maior = mais rápido)
+
+-- =======================================================================
+-- VALORES DOS EMOTES (editáveis pelo painel DEV)
+-- =======================================================================
+local defaultEmotes = {
+	["Tchau"] = { 
+		dir = { x = 4, y = -78, z = 180, px = 0.4, py = 0.3, pz = 0.5 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {0,0}, {0,0}, {0,0}, {0,0}, {0,0} }, afastDir = 0,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0 
+	},
+	["Paz"] = { 
+		dir = { x = 43, y = 69, z = 120, px = 0.0, py = -0.6, pz = 0.0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {53,65}, {0,0}, {0,0}, {85,90}, {85,90} }, afastDir = 20,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {0,0}, {0,0}, {0,0}, {0,0}, {0,0} }, afastEsq = 0 
+	},
+	["Sim"] = { 
+		dir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastDir = 0,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0 
+	},
+	["Maçaneta"] = {
+		dir = { x = 45, y = 29, z = 26, px = 0, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {5,70}, {18,71}, {17,72}, {17,71}, {18,70} }, afastDir = 0,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {15,15}, {15,15}, {15,15}, {15,15}, {15,15} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }
+	},
+	["Bow"] = {
+		dir = { x = 65, y = 53, z = 75, px = 0.22, py = -0.08, pz = -0.29 }, palmaDir = { x = 0, y = 91, z = 0 },
+		dedosDir = { {30,80}, {30,80}, {30,80}, {30,80}, {30,80} }, afastDir = 0,
+		esq = { x = 58, y = -61, z = -75, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = -91, z = 0 },
+		dedosEsq = { {30,80}, {30,80}, {30,80}, {30,80}, {30,80} }, afastEsq = 0,
+		cabeca = { x = -35, y = 0, z = 0 }, torso = { x = 18, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = -58, px = 0.79, py = 0, pz = 0 }, pernaEsq = { x = 0, y = 0, z = 58, px = -0.79, py = 0, pz = 0 }
+	},
+	["Dedo"] = {
+		dir = { x = 66, y = 72, z = 107, px = 0.04, py = -0.97, pz = 0 }, palmaDir = { x = 0, y = 4, z = 0 },
+		dedosDir = { {60,70}, {90,90}, {0,0}, {90,90}, {90,90} }, afastDir = 0,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = 0 }, pernaEsq = { x = 0, y = 0, z = 0 }
+	},
+	["Citação"] = {
+		dir = { x = 0, y = 64, z = 80, px = 0.45, py = -0.24, pz = 0.47 }, palmaDir = { x = 0, y = 90, z = 0 },
+		dedosDir = { {90,90}, {0,0}, {90,90}, {90,90}, {90,90} }, afastDir = 0,
+		esq = { x = 0, y = -23, z = -80, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = -90, z = 0 },
+		dedosEsq = { {28,31}, {28,60}, {0,0}, {0,0}, {0,0} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = 0 }, pernaEsq = { x = 0, y = 0, z = 0 }
+	},
+	["Sentido"] = {
+		dir = { x = -23, y = -61, z = -42, px = -0.01, py = -0.24, pz = -0.6 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {0,0}, {0,0}, {0,0}, {0,0}, {0,0} }, afastDir = 0,
+		esq = { x = -7, y = 61, z = 29, px = 0.27, py = -0.16, pz = -0.39 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = -19, y = 0, z = 0 }, torso = { x = 13, y = 0, z = 0 },
+		pernaDir = { x = 2, y = -20, z = 11 }, pernaEsq = { x = -3, y = 20, z = -11 }
+	},
+	["Convidando"] = {
+		dir = { x = -30, y = 6, z = 110, px = 0.2, py = -0.58, pz = -0.29 }, palmaDir = { x = 0, y = -90, z = 0 },
+		dedosDir = { {60,60}, {40,40}, {90,90}, {90,90}, {90,90} }, afastDir = 0,
+		esq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = 0 }, pernaEsq = { x = 0, y = 0, z = 0 }
+	},
+	["Dancinha"] = {
+		dir = { x = -25, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastDir = 0,
+		esq = { x = -25, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = -12 }, torso = { x = 0, y = 0, z = 16 },
+		pernaDir = { x = 0, y = 0, z = 0 }, pernaEsq = { x = 0, y = 0, z = 0 }
+	},
+	["Cala a Boca"] = {
+		dir = { x = -39, y = -5, z = 144, px = 0.13, py = -1.35, pz = -0.55 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {60,60}, {0,0}, {90,90}, {90,90}, {90,90} }, afastDir = 0,
+		esq = { x = 0, y = -15, z = -122, px = 0, py = 0, pz = 0 }, palmaEsq = { x = -2, y = -90, z = 0 },
+		dedosEsq = { {20,25}, {40,35}, {40,35}, {40,35}, {40,35} }, afastEsq = 0,
+		cabeca = { x = -3, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }
+	},
+	["Deitado de Frente"] = {
+		dir = { x = -180, y = -118, z = -59, px = 0.21, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {15,20}, {25,35}, {25,35}, {25,35}, {25,35} }, afastDir = 0,
+		esq = { x = -180, y = 119, z = 39, px = -0.33, py = 0.27, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {15,20}, {25,35}, {25,35}, {25,35}, {25,35} }, afastEsq = 0,
+		cabeca = { x = -86, y = 0, z = 0 }, torso = { x = 90, y = 0, z = 0 },
+		pernaDir = { x = -25, y = 0, z = 15, px = 0, py = 0.3, pz = 0.07 }, pernaEsq = { x = -25, y = 0, z = -13, px = 0, py = 0.3, pz = 0.07 }
+	},
+	["Sentar"] = {
+		dir = { x = -27, y = -2, z = 14, px = 0, py = -0.65, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {10,10,0,0,41,0,0,0}, {10,10,0,0,7,0,0,0}, {10,10,0,0,35,0,0,0}, {10,13,0,0,35,0,0,0}, {0,8,0,0,24,0,0,0} }, afastDir = 0,
+		esq = { x = -27, y = 2, z = -14, px = 0, py = -0.65, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10,0,0,41,0,0,0}, {10,10,0,0,7,0,0,0}, {10,10,0,0,35,0,0,0}, {10,13,0,0,35,0,0,0}, {0,8,0,0,24,0,0,0} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = -4, y = -22, z = 90, px = 0, py = 0, pz = 0 }, pernaEsq = { x = -4, y = 22, z = -90, px = 0, py = 0, pz = 0 }
+	},
+	["Ajoelhar"] = {
+		dir = { x = -6, y = 0, z = 10, px = 0.03, py = -0.22, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {0,9,0,0,-9,0,0,0}, {10,10}, {10,10}, {10,10}, {10,10} }, afastDir = 0,
+		esq = { x = -20, y = -46, z = -77, px = -0.17, py = -0.25, pz = 0 }, palmaEsq = { x = 14, y = 1, z = 11 },
+		dedosEsq = { {25,23,0,-90,0,0,0,0}, {10,10,0,0,-35,0,0,0}, {10,10,0,0,-39,0,0,0}, {10,10,0,0,-43,0,0,0}, {10,10,0,0,-56,0,0,0} }, afastEsq = 11,
+		cabeca = { x = 7, y = -1, z = 4 }, torso = { x = 10, y = 0, z = 0 },
+		pernaDir = { x = -2, y = 14, z = -85, px = 1.03, py = -0.36, pz = -0.01 }, pernaEsq = { x = 0, y = -1, z = 7, px = -1.15, py = 1.05, pz = 0 }
+	},
+	["Dormir"] = {
+		dir = { x = -6, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastDir = 0,
+		esq = { x = -6, y = 0, z = 0, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 0 }, torso = { x = -90, y = 0, z = 0 },
+		pernaDir = { x = -5, y = 0, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = -5, y = 0, z = 0, px = 0, py = 0, pz = 0 }
+	},
+	["Dormir2"] = {
+		dir = { x = 43, y = 67, z = 37, px = 0, py = 0, pz = 0 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastDir = 0,
+		esq = { x = 47, y = -107, z = -134, px = 0, py = 0, pz = 0 }, palmaEsq = { x = 0, y = 162, z = 1 },
+		dedosEsq = { {10,10}, {10,10}, {10,10}, {10,10}, {10,10} }, afastEsq = 0,
+		cabeca = { x = 0, y = 0, z = 26 }, torso = { x = -90, y = 0, z = 90 },
+		pernaDir = { x = 9, y = 6, z = 9, px = 0, py = 0, pz = 0 }, pernaEsq = { x = -5, y = 0, z = 0, px = 0, py = 0, pz = 0 }
+	},
+	["Braços Cruzados"] = {
+		dir = { x = -20, y = 60, z = 88, px = 0.23, py = -0.31, pz = -0.29 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {40,50}, {40,50}, {40,50}, {40,50}, {40,50} }, afastDir = 0,
+		esq = { x = 0, y = -60, z = -82, px = -0.38, py = -0.35, pz = -0.11 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {40,50}, {40,50}, {40,50}, {40,50}, {40,50} }, afastEsq = 0,
+		cabeca = { x = -6, y = 8, z = 0 }, torso = { x = 0, y = 0, z = 0 },
+		pernaDir = { x = -3, y = -12, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = -2, y = 14, z = 0, px = 0, py = 0, pz = 0 }
+	},
+}
+
+local function poseMaoVazia()
+	return {
+		braco = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
+		palma = { x = 0, y = 0, z = 0 },
+		-- cada dedo: { base, ponta, rotX, rotY, rotZ, posX, posY, posZ }
+		dedos = { { 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0 } },
+		afastamento = 0,
+	}
+end
+
+local customPose = {
+	direita = poseMaoVazia(),
+	esquerda = poseMaoVazia(),
+	torso = { x = 0, y = 0, z = 0 },
+	cabeca = { x = 0, y = 0, z = 0 },
+	pernaDir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
+	pernaEsq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
+}
+
+local function criarMola(stiffness, damping)
+	return {
+		x = 0, v = 0, t = 0,
+		s = stiffness or 250,
+		d = damping or 15,
+		update = function(self, dt)
+			local f = (self.t - self.x) * self.s - self.v * self.d
+			self.v = self.v + f * dt
+			self.x = self.x + self.v * dt
+			return self.x
+		end,
+	}
+end
+
+local molaBracoDireito = criarMola(250, 15)
+local molaBracoEsquerdo = criarMola(250, 15)
+local molaCabeca = criarMola(250, 15)
+local molaCorpo = criarMola(250, 15)
+local molaPernas = criarMola(250, 15)
+
+-- =======================================================================
+-- GEOMETRIA DAS MÃOS (compartilhada entre o personagem real e os previews)
+-- =======================================================================
+-- largura e profundidade da palma = as do braço R6 (1 x 1); só a espessura (Y) vem daqui
+local PALMA_SIZE = Vector3.new(1, 0.1, 1)
+
+-- MODELO DAS PEÇAS: clona o próprio braço do personagem (pega o mesmo acabamento/malha dele)
+-- e só troca o tamanho. Mantém apenas malhas (SpecialMesh etc.); joints, attachments e afins saem.
+-- Se o membro não for um Part, cai no Part simples de antes.
+-- MESH DOS DEDOS E DA PALMA: "Smooth Block Mesh" (Creator Store), id 7901148353.
+-- É carregada como MeshPart (AssetService:CreateMeshPartAsync); como MeshPart estica a malha
+-- até o Size da peça, cada falange pega automaticamente a largura/altura/profundidade
+-- que já tinha em CONFIG_DEDOS (inclusive o achatamento da ponta ao tocar no chão).
+local MESH_DEDO_ID = "rbxassetid://7901148353"
+local USAR_MESH_DEDO = true
+local meshDedoModelo = nil -- preenchido por carregarMeshDedo()
+
+-- JUNTAS: cunha em cada articulação (entre base e ponta do dedo) pra tampar o buraco
+-- que aparece quando o dedo dobra. Cada junta usa 2 WedgeParts que formam o triângulo exato
+-- do vão (muda de tamanho/posição conforme o ângulo da ponta). Raio = metade da largura do
+-- dedo * JUNTA_ESCALA; profundidade = espessura do dedo * JUNTA_PROFUND.
+local JUNTA_ATIVA = true
+local JUNTA_ESCALA = 1.0 -- aumente (ex.: 1.1) se ainda aparecer fresta
+local JUNTA_PROFUND = 0.98 -- um pouco menor que 1 evita "tremida" de faces coladas
+
+local function carregarMeshDedo()
+	if not USAR_MESH_DEDO or meshDedoModelo then return end
+	local ok, mp = pcall(function()
+		return game:GetService("AssetService"):CreateMeshPartAsync(MESH_DEDO_ID)
+	end)
+	if ok and mp then
+		mp.Anchored = false
+		mp.CanCollide = false
+		mp.CanQuery = false
+		mp.CanTouch = false
+		mp.Massless = true
+		mp.TextureID = ""
+		meshDedoModelo = mp
+	else
+		warn("[Mãos] não consegui carregar a mesh dos dedos, usando o formato antigo:", mp)
+	end
+end
+
+local function pecaDoMembro(membro, tamanho, isPalma)
+	local p
+	if isPalma then
+		-- palma sempre com a largura/profundidade exatas do braço (R6 = 1 x 1)
+		tamanho = Vector3.new(membro.Size.X, tamanho.Y, membro.Size.Z)
+	end
+	if meshDedoModelo then
+		p = meshDedoModelo:Clone()
+		p.Name = isPalma and "Palma" or "Dedo"
+		p.Size = tamanho -- resize: a malha estica pro tamanho da peça (dedo ou palma)
+		p.Color = membro.Color
+		p.Material = isPalma and Enum.Material.SmoothPlastic or membro.Material
+		p.Transparency = 0
+		return p
+	end
+	if membro:IsA("Part") then
+		local ok, c = pcall(function() return membro:Clone() end)
+		p = ok and c or nil
+	end
+	if p then
+		for _, c in ipairs(p:GetChildren()) do
+			if not c:IsA("DataModelMesh") then c:Destroy() end
+		end
+	else
+		p = Instance.new("Part")
+	end
+	p.Name = isPalma and "Palma" or "Dedo"
+	p.Size = tamanho
+	p.BrickColor = membro.BrickColor
+	p.Material = isPalma and Enum.Material.SmoothPlastic or membro.Material
+	p.Transparency = 0
+	return p
+end
+
+-- cunha da articulação (mesma cor/material do braço). A junta são 2 cunhas: { cunha1, cunha2 }
+local function juntaDoMembro(membro)
+	local function nova()
+		local p = Instance.new("WedgePart")
+		p.Name = "Junta"
+		p.Size = Vector3.new(0.2, 0.01, 0.01)
+		p.Color = membro.Color
+		p.Material = membro.Material
+		p.Transparency = 0
+		return p
+	end
+	return { nova(), nova() }
+end
+
+-- IDs: 1 = polegar, 2 = indicador, 3 = médio, 4 = anelar, 5 = mindinho
+local NOMES_DEDOS = { "Polegar", "Indicador", "Médio", "Anelar", "Mindinho" }
+
+local CONFIG_DEDOS = {
+	{ tampBase = Vector3.new(0.24, 0.24, 0.24), tampPonta = Vector3.new(0.24, 0.22, 0.24) },
+	{ tampBase = Vector3.new(0.22, 0.29, 0.22), tampPonta = Vector3.new(0.22, 0.26, 0.22) },
+	{ tampBase = Vector3.new(0.23, 0.34, 0.23), tampPonta = Vector3.new(0.23, 0.30, 0.23) },
+	{ tampBase = Vector3.new(0.22, 0.30, 0.22), tampPonta = Vector3.new(0.22, 0.28, 0.22) },
+	{ tampBase = Vector3.new(0.19, 0.24, 0.19), tampPonta = Vector3.new(0.19, 0.22, 0.19) },
+}
+
+local CONFIG_POS = {
+	Direita = {
+		{ pos = Vector3.new(-0.35, -0.05, -0.38), eixo = Vector3.new(0, 0, 1), dir = 1 },
+		{ pos = Vector3.new(0.38, -0.05, -0.36), eixo = Vector3.new(0, 0, 1), dir = -1 },
+		{ pos = Vector3.new(0.38, -0.05, -0.12), eixo = Vector3.new(0, 0, 1), dir = -1 },
+		{ pos = Vector3.new(0.38, -0.05, 0.12), eixo = Vector3.new(0, 0, 1), dir = -1 },
+		{ pos = Vector3.new(0.38, -0.05, 0.36), eixo = Vector3.new(0, 0, 1), dir = -1 },
+	},
+	Esquerda = {
+		{ pos = Vector3.new(0.35, -0.05, -0.38), eixo = Vector3.new(0, 0, 1), dir = -1 },
+		{ pos = Vector3.new(-0.38, -0.05, -0.36), eixo = Vector3.new(0, 0, 1), dir = 1 },
+		{ pos = Vector3.new(-0.38, -0.05, -0.12), eixo = Vector3.new(0, 0, 1), dir = 1 },
+		{ pos = Vector3.new(-0.38, -0.05, 0.12), eixo = Vector3.new(0, 0, 1), dir = 1 },
+		{ pos = Vector3.new(-0.38, -0.05, 0.36), eixo = Vector3.new(0, 0, 1), dir = 1 },
+	},
+}
+
+local ANG_AFASTAR = { -45, -18, 0, 18, 40 }
+
+local function afastGraus(id, ehDireito, afastVal)
+	local a = (ANG_AFASTAR[id] / 45) * afastVal
+	if not ehDireito then a = -a end
+	return a
+end
+
+-- =======================================================================
+-- EXTRAS POR DEDO: rotação (graus) e posição (studs) em relação à palma
+-- formato do dedo: { base, ponta, rotX, rotY, rotZ, posX, posY, posZ }
+-- emotes antigos só com { base, ponta } continuam valendo (extras = 0)
+-- =======================================================================
+local function copiaDedo(t)
+	t = t or {}
+	return { t[1] or 0, t[2] or 0, t[3] or 0, t[4] or 0, t[5] or 0, t[6] or 0, t[7] or 0, t[8] or 0 }
+end
+
+local function dedoTemExtra(t)
+	if not t then return false end
+	for i = 3, 8 do
+		if (t[i] or 0) ~= 0 then return true end
+	end
+	return false
+end
+
+-- extras do dedo vindos da config do emote (nil se o emote não existe)
+local function extraDedoEmote(emote, id, ehDireito)
+	local d = emote and defaultEmotes[emote]
+	if not d then return nil end
+	local lista = ehDireito and d.dedosDir or d.dedosEsq
+	return lista and lista[id] or nil
+end
+
+-- devolve (CFrame da base, CFrame da ponta) relativos à palma
+-- ext = tabela do dedo (índices 3..8 = rotX, rotY, rotZ, posX, posY, posZ); na mão esquerda
+-- posX e as rotações Y/Z são espelhadas, então o mesmo valor dá o mesmo visual nas duas mãos
+local function calcFingerCFrames(id, ehDireito, angBase, angPonta, afastDeg, ext)
+	local c = CONFIG_DEDOS[id]
+	local l = (ehDireito and CONFIG_POS.Direita or CONFIG_POS.Esquerda)[id]
+	local radBase = rad(angBase * l.dir)
+	local radPonta = rad(angPonta * l.dir)
+	local rot = CFrame.fromAxisAngle(l.eixo, radBase)
+	if afastDeg and afastDeg ~= 0 then
+		rot = CFrame.Angles(rad(afastDeg), 0, 0) * rot
+	end
+	local origem = l.pos
+	if ext then
+		local m = ehDireito and 1 or -1
+		local rx, ry, rz = ext[3] or 0, ext[4] or 0, ext[5] or 0
+		local px, py, pz = ext[6] or 0, ext[7] or 0, ext[8] or 0
+		origem = l.pos + Vector3.new(px * m, py, pz)
+		rot = CFrame.Angles(rad(rx), rad(ry * m), rad(rz * m)) * rot
+	end
+	local baseCF = CFrame.new(origem) * rot * CFrame.new(0, -c.tampBase.Y / 2, 0)
+	local pivot = baseCF * CFrame.new(0, -c.tampBase.Y / 2, 0)
+	local pontaCF = pivot * CFrame.fromAxisAngle(l.eixo, radPonta) * CFrame.new(0, -c.tampPonta.Y / 2, 0)
+	return baseCF, pontaCF, pivot
+end
+
+-- CUNHAS DA JUNTA. No pivô, a base termina numa face reta (y = 0) e a ponta gira angPonta em
+-- volta do eixo Z. Do lado de fora da curva abre um vão triângulo (pivô, A, C):
+--   A = canto da face da base, C = canto da face da ponta (já girado). É isósceles, e o
+-- WedgePart é triângulo retângulo, então divide em 2 pela altura PM (M = meio de A-C).
+-- Devolve (cf1, size1, cf2, size2) relativos à palma; pivotCF vem do calcFingerCFrames.
+local function calcJuntaCFrames(id, ehDireito, angPonta, pivotCF)
+	local c = CONFIG_DEDOS[id]
+	local l = (ehDireito and CONFIG_POS.Direita or CONFIG_POS.Esquerda)[id]
+	local th = rad(angPonta * l.dir)
+	th = clamp(th, rad(-170), rad(170))
+	local lado = (th > 0) and -1 or 1 -- o vão abre do lado oposto ao da dobra
+	local r = (c.tampBase.X / 2) * JUNTA_ESCALA
+	local prof = c.tampBase.Z * JUNTA_PROFUND
+
+	local P = Vector3.new(0, 0, 0)
+	local A = Vector3.new(lado * r, 0, 0)
+	local C = Vector3.new(lado * r * cos(th), lado * r * sin(th), 0)
+	local M = (A + C) / 2
+
+	local back = (M - P).Unit
+	local perp = Vector3.new(-back.Y, back.X, 0)
+	local up1 = ((A - M):Dot(perp) >= 0) and perp or -perp
+	local up2 = -up1
+
+	local a = (M - P).Magnitude
+	local b = (A - M).Magnitude
+	a, b = math.max(a, 0.001), math.max(b, 0.001)
+
+	-- WedgePart: ângulo reto em (-Y, +Z) locais; Size.Z = cateto ao longo de PM, Size.Y = cateto M->A
+	local cf1 = pivotCF * CFrame.fromMatrix((A + P) / 2, up1:Cross(back), up1, back)
+	local cf2 = pivotCF * CFrame.fromMatrix((C + P) / 2, up2:Cross(back), up2, back)
+	return cf1, Vector3.new(prof, b, a), cf2, Vector3.new(prof, b, a)
+end
+
+-- ângulos dos dedos para os emotes padrão (nil = 0,0)
+local function alvoDedosEmote(emote, id, ehDireito)
+	if emote == "Tchau" then
+		return math.random(-5, 5), 0
+	elseif emote == "Paz" then
+		if id == 1 then
+			return 53, 65
+		elseif ehDireito and (id == 2 or id == 3) then
+			return 0, 0
+		end
+		return 85, 90
+	elseif emote == "Apontar" then
+		if id == 2 and ehDireito then return 0, 0 end
+		return 90, 90
+	elseif emote == "Bow" then
+		return 30, 80
+	elseif emote == "Dancinha" then
+		return 10, 10
+	elseif emote == "Cala a Boca" then
+		if ehDireito then
+			-- indicador esticado na frente da boca
+			if id == 2 then return 0, 0 end
+			if id == 1 then return 60, 60 end
+			return 90, 90
+		end
+		-- mão esquerda faz o "blá blá blá": dedos abrem e fecham contra o polegar
+		local k = 0.5 + 0.5 * sin(tick() * 10)
+		if id == 1 then return 10 + 25 * k, 10 + 25 * k end
+		return 5 + 55 * k, 5 + 45 * k
+	elseif emote == "Braços Cruzados" then
+		local d = defaultEmotes["Braços Cruzados"]
+		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
+		return f[1], f[2]
+	elseif emote == "Maçaneta" or emote == "Deitado de Frente" or emote == "Sentar" or emote == "Ajoelhar" or emote == "Dormir" or emote == "Dormir2" then
+		-- dedos vêm da config (defaultEmotes) pra ficar igual ao DEV
+		local d = defaultEmotes[emote]
+		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
+		return f[1], f[2]
+	elseif emote == "Dedo" then
+		if not ehDireito then return 10, 10 end
+		if id == 3 then return 0, 0 end
+		if id == 1 then return 60, 70 end
+		return 90, 90
+	elseif emote == "Citação" then
+		if ehDireito then
+			if id == 2 then return 0, 0 end
+			return 90, 90
+		end
+		-- mão esquerda: círculo com polegar + indicador, resto aberto
+		if id == 1 then return 28, 31 end
+		if id == 2 then return 28, 60 end
+		return 0, 0
+	elseif emote == "Sentido" then
+		if not ehDireito then return 10, 10 end
+		return 0, 0
+	elseif emote == "Convidando" then
+		if not ehDireito then return 10, 10 end
+		if id == 2 then
+			local c = 40 + 40 * sin(tick() * 8)
+			return c, c
+		elseif id == 1 then
+			return 60, 60
+		end
+		return 90, 90
+	end
+	return nil
+end
+
+-- =======================================================================
+-- POSES (braços / cabeça / torso / pernas)
+-- =======================================================================
+local function poseVazia()
+	return {
+		wR = 0, wL = 0, wN = 0, wB = 0, wP = 0,
+		R = CFrame.new(), L = CFrame.new(), N = CFrame.new(), B = CFrame.new(),
+		PR = CFrame.new(), PL = CFrame.new(),
+	}
+end
+
+local function cfBraco(p)
+	return CFrame.new(p.px, p.py, p.pz) * CFrame.Angles(rad(p.x), rad(p.y), rad(p.z))
+end
+
+local function cfRot(p)
+	return CFrame.Angles(rad(p.x), rad(p.y), rad(p.z))
+end
+
+-- perna: rotacao + posicao (px/py/pz opcionais; entradas antigas sem posicao valem 0)
+local function cfPerna(p)
+	return CFrame.new(p.px or 0, p.py or 0, p.pz or 0) * CFrame.Angles(rad(p.x), rad(p.y), rad(p.z))
+end
+
+-- pose montada pelo painel DEV
+local function calcularPoseCustom()
+	local P = poseVazia()
+	if animConfig.direita then
+		P.wR = 1
+		P.R = cfBraco(customPose.direita.braco)
+	end
+	if animConfig.esquerda then
+		P.wL = 1
+		P.L = cfBraco(customPose.esquerda.braco)
+	end
+	if animConfig.cabeca then
+		P.wN = 1
+		P.N = cfRot(customPose.cabeca)
+	end
+	if animConfig.torso then
+		P.wB = 1
+		P.B = cfRot(customPose.torso)
+	end
+	if animConfig.pernas then
+		P.wP = 1
+		P.PR = cfPerna(customPose.pernaDir)
+		P.PL = cfPerna(customPose.pernaEsq)
+	end
+	return P
+end
+
+-- pose dos emotes padrão. usar = respeita os toggles de braço do DEV
+local function calcularPoseEmote(emote, tempo, usar)
+	local P = poseVazia()
+	local dirOn = (not usar) or animConfig.direita
+	local esqOn = (not usar) or animConfig.esquerda
+
+	if emote == "Tchau" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(0.4, 0.3, 0.5) * CFrame.Angles(rad(4), rad(-78), rad(180) + rad(30) * sin(tempo * 12))
+		end
+	elseif emote == "Paz" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(0.0, -0.6, 0.0) * CFrame.Angles(rad(43), rad(69), rad(120))
+		end
+	elseif emote == "Sim" then
+		if dirOn then
+			P.wN = 1
+			P.N = CFrame.Angles(rad(22) * sin(tempo * 10), 0, 0)
+		end
+	elseif emote == "Maçaneta" then
+		-- lê defaultEmotes["Maçaneta"] (igual ao DEV); só o giro da maçaneta (Z) é animado
+		local d = defaultEmotes["Maçaneta"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir) * CFrame.Angles(0, 0, rad(20) * sin(tempo * 12))
+		end
+	elseif emote == "Apontar" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.Angles(0, 0, rad(90))
+		end
+	elseif emote == "Dedo" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(0.04, -0.97, 0) * CFrame.Angles(rad(66), rad(72), rad(107))
+		end
+	elseif emote == "Citação" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(0.45, -0.24, 0.47 + CITACAO_AMP * sin(tempo * CITACAO_VEL)) * CFrame.Angles(0, rad(64), rad(80))
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = CFrame.Angles(0, rad(-23), rad(-80))
+		end
+	elseif emote == "Sentido" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(-0.01, -0.24, -0.6) * CFrame.Angles(rad(-23), rad(-61), rad(-42))
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = CFrame.new(0.27, -0.16, -0.39) * CFrame.Angles(rad(-7), rad(61), rad(29))
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		P.N = CFrame.Angles(rad(-19), 0, 0)
+		P.B = CFrame.Angles(rad(13), 0, 0)
+		P.PR = CFrame.Angles(rad(2), rad(-20), rad(11))
+		P.PL = CFrame.Angles(rad(-3), rad(20), rad(-11))
+	elseif emote == "Convidando" then
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.new(0.2, -0.58, -0.29) * CFrame.Angles(rad(-30), rad(6), rad(110))
+		end
+	elseif emote == "Dancinha" then
+		local s, c = sin(tempo * 5), cos(tempo * 5)
+		if dirOn then
+			P.wR = 1
+			P.R = CFrame.Angles(rad(-25 - 8 * s), 0, 0)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = CFrame.Angles(rad(-25 + 8 * s), 0, 0)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		P.B = CFrame.Angles(0, rad(10 * s), rad(16 * c))
+		P.N = CFrame.Angles(0, rad(-6 * s), rad(-12 * c))
+		P.PR = CFrame.Angles(rad(7 * s), 0, 0)
+		P.PL = CFrame.Angles(rad(-7 * s), 0, 0)
+	elseif emote == "Cala a Boca" then
+		-- braços/cabeça lêem defaultEmotes["Cala a Boca"] (igual ao DEV); só o balanço da cabeça é animado
+		local d = defaultEmotes["Cala a Boca"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.N = CFrame.Angles(rad(d.cabeca.x + 3 * sin(tempo * 10)), rad(d.cabeca.y), rad(d.cabeca.z))
+	elseif emote == "Braços Cruzados" then
+		-- lê defaultEmotes["Braços Cruzados"]: emote principal = config do DEV
+		local d = defaultEmotes["Braços Cruzados"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.wP = 1
+		P.N = cfRot(d.cabeca)
+		P.PR = cfPerna(d.pernaDir)
+		P.PL = cfPerna(d.pernaEsq)
+	elseif emote == "Deitado de Frente" then
+		-- lê direto de defaultEmotes["Deitado de Frente"]: emote principal = config do DEV (sem valores duplicados)
+		local d = defaultEmotes["Deitado de Frente"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		P.N = cfRot(d.cabeca)
+		P.B = cfRot(d.torso)
+		P.PR = cfPerna(d.pernaDir)
+		P.PL = cfPerna(d.pernaEsq)
+	elseif emote == "Sentar" or emote == "Ajoelhar" or emote == "Dormir" or emote == "Dormir2" then
+		-- lê defaultEmotes[emote] (igual ao DEV); só a cabeça "respira" de leve
+		local d = defaultEmotes[emote]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		-- só o Sentar "respira"; no Dormir a cabeça fica parada (senão balança pra frente e pra trás)
+		local respiro = (emote == "Sentar") and rad(1.5 * sin(tempo * 1.6)) or 0
+		P.N = cfRot(d.cabeca) * CFrame.Angles(respiro, 0, 0)
+		P.B = cfRot(d.torso)
+		P.PR = cfPerna(d.pernaDir)
+		P.PL = cfPerna(d.pernaEsq)
+	elseif emote == "Bow" then
+		-- lê defaultEmotes["Bow"] (igual ao DEV); mantém só a animação de balanço da cabeça/torso
+		local d = defaultEmotes["Bow"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		local bob = sin(tempo * 7.2) * 26
+		P.N = cfRot(d.cabeca) * CFrame.Angles(rad(-bob), rad(8 * sin(tempo * 4)), 0)
+		P.B = cfRot(d.torso) * CFrame.Angles(0, 0, rad(8 * cos(tempo * 2.5)))
+		P.PR = cfPerna(d.pernaDir)
+		P.PL = cfPerna(d.pernaEsq)
+	end
+	return P
+end
+
+-- =======================================================================
+-- CARREGAR UM EMOTE NO EDITOR
+-- =======================================================================
+local ZERO3 = { x = 0, y = 0, z = 0 }
+local function copia3(t)
+	t = t or ZERO3
+	return { x = t.x, y = t.y, z = t.z }
+end
+local function naoZero(t)
+	return t.x ~= 0 or t.y ~= 0 or t.z ~= 0 or (t.px or 0) ~= 0 or (t.py or 0) ~= 0 or (t.pz or 0) ~= 0
+end
+
+-- copia de perna incluindo posicao (default 0 pra emotes antigos)
+local function copiaPerna(t)
+	t = t or ZERO3
+	return { x = t.x, y = t.y, z = t.z, px = t.px or 0, py = t.py or 0, pz = t.pz or 0 }
+end
+
+-- HISTÓRICO (desfazer): guarda a config atual antes de Resetar pose / trocar de emote
+local function copiaProfunda(v)
+	if type(v) ~= "table" then return v end
+	local c = {}
+	for k, x in pairs(v) do c[k] = copiaProfunda(x) end
+	return c
+end
+
+local historicoPose = {}
+local HISTORICO_MAX = 20
+
+local function salvarSnapshotPose()
+	if not currentEmote then return end
+	table.insert(historicoPose, {
+		emote = currentEmote,
+		pose = copiaProfunda(customPose),
+		anim = copiaProfunda(animConfig),
+	})
+	if #historicoPose > HISTORICO_MAX then table.remove(historicoPose, 1) end
+end
+
+-- devolve o nome do emote restaurado (ou nil se não há nada pra desfazer)
+local function restaurarSnapshotPose()
+	local snap = table.remove(historicoPose)
+	if not snap then return nil end
+	currentEmote = snap.emote
+	freezeEmote = true
+	-- copia DENTRO das tabelas existentes (a UI guarda referências a customPose.direita/esquerda)
+	for _, lado in ipairs({ "direita", "esquerda" }) do
+		for k, v in pairs(snap.pose[lado]) do customPose[lado][k] = v end
+	end
+	for _, parte in ipairs({ "cabeca", "torso", "pernaDir", "pernaEsq" }) do
+		customPose[parte] = snap.pose[parte]
+	end
+	for k, v in pairs(snap.anim) do animConfig[k] = v end
+	return snap.emote
+end
+
+local function carregarEmote(nome)
+	local d = defaultEmotes[nome]
+	if not d then return false end
+	salvarSnapshotPose()
+	currentEmote = nome
+	freezeEmote = true
+
+	local D, E = customPose.direita, customPose.esquerda
+	D.braco = { x = d.dir.x, y = d.dir.y, z = d.dir.z, px = d.dir.px, py = d.dir.py, pz = d.dir.pz }
+	D.palma = copia3(d.palmaDir)
+	D.afastamento = d.afastDir
+	E.braco = { x = d.esq.x, y = d.esq.y, z = d.esq.z, px = d.esq.px, py = d.esq.py, pz = d.esq.pz }
+	E.palma = copia3(d.palmaEsq)
+	E.afastamento = d.afastEsq
+	for j = 1, 5 do
+		D.dedos[j] = copiaDedo(d.dedosDir[j])
+		E.dedos[j] = copiaDedo(d.dedosEsq[j])
+	end
+
+	customPose.cabeca = copia3(d.cabeca)
+	customPose.torso = copia3(d.torso)
+	customPose.pernaDir = copiaPerna(d.pernaDir)
+	customPose.pernaEsq = copiaPerna(d.pernaEsq)
+
+	animConfig.direita = true
+	animConfig.esquerda = true
+	animConfig.cabeca = naoZero(customPose.cabeca)
+	animConfig.torso = naoZero(customPose.torso)
+	animConfig.pernas = naoZero(customPose.pernaDir) or naoZero(customPose.pernaEsq)
+	return true
+end
+
+-- RESETAR SÓ UMA PARTE: volta apenas essa parte pro valor original do emote atual.
+-- parte: "bracos" | "maos" (palma + dedos + abertura) | "torso" | "cabeca" | "pernas"
+-- Salva snapshot antes, então o botão Desfazer também desfaz esse reset.
+-- Não mexe nos toggles de ativação (animConfig).
+local function resetarParte(parte)
+	local d = currentEmote and defaultEmotes[currentEmote]
+	if not d then return false end
+	salvarSnapshotPose()
+
+	local D, E = customPose.direita, customPose.esquerda
+	if parte == "bracos" then
+		D.braco = { x = d.dir.x, y = d.dir.y, z = d.dir.z, px = d.dir.px or 0, py = d.dir.py or 0, pz = d.dir.pz or 0 }
+		E.braco = { x = d.esq.x, y = d.esq.y, z = d.esq.z, px = d.esq.px or 0, py = d.esq.py or 0, pz = d.esq.pz or 0 }
+	elseif parte == "maos" then
+		D.palma = copia3(d.palmaDir)
+		E.palma = copia3(d.palmaEsq)
+		D.afastamento = d.afastDir or 0
+		E.afastamento = d.afastEsq or 0
+		for j = 1, 5 do
+			D.dedos[j] = copiaDedo(d.dedosDir[j])
+			E.dedos[j] = copiaDedo(d.dedosEsq[j])
+		end
+	elseif parte == "torso" then
+		customPose.torso = copia3(d.torso)
+	elseif parte == "cabeca" then
+		customPose.cabeca = copia3(d.cabeca)
+	elseif parte == "pernas" then
+		customPose.pernaDir = copiaPerna(d.pernaDir)
+		customPose.pernaEsq = copiaPerna(d.pernaEsq)
+	else
+		return false
+	end
+	return true
+end
+
+-- =======================================================================
+-- TEMA + HELPERS DE UI
+-- =======================================================================
+local T = {
+	bg = Color3.fromRGB(15, 17, 24),
+	surface = Color3.fromRGB(22, 25, 35),
+	surface2 = Color3.fromRGB(30, 34, 47),
+	surface3 = Color3.fromRGB(42, 47, 64),
+	stroke = Color3.fromRGB(52, 58, 80),
+	text = Color3.fromRGB(236, 239, 247),
+	sub = Color3.fromRGB(152, 160, 184),
+	dim = Color3.fromRGB(104, 112, 136),
+	accent = Color3.fromRGB(124, 108, 255),
+	accentSoft = Color3.fromRGB(46, 41, 98),
+	ok = Color3.fromRGB(62, 200, 128),
+	danger = Color3.fromRGB(236, 86, 92),
+	warn = Color3.fromRGB(246, 182, 70),
+	ax = { Color3.fromRGB(240, 98, 98), Color3.fromRGB(80, 200, 130), Color3.fromRGB(88, 140, 250) },
+}
+
+local F = Enum.Font
+local LEFT, CENTER, RIGHT = Enum.TextXAlignment.Left, Enum.TextXAlignment.Center, Enum.TextXAlignment.Right
+
+local function new(class, props, kids)
+	local o = Instance.new(class)
+	local parent
+	for k, v in pairs(props or {}) do
+		if k == "Parent" then parent = v else o[k] = v end
+	end
+	for _, c in ipairs(kids or {}) do c.Parent = o end
+	if parent then o.Parent = parent end
+	return o
+end
+
+local function merge(base, props)
+	for k, v in pairs(props or {}) do base[k] = v end
+	return base
+end
+
+local function frame(props, kids)
+	return new("Frame", merge({ BorderSizePixel = 0, BackgroundColor3 = T.surface }, props), kids)
+end
+
+local function txt(props, kids)
+	return new("TextLabel", merge({
+		BackgroundTransparency = 1, BorderSizePixel = 0, Font = F.Gotham, TextColor3 = T.text,
+		TextSize = 12, TextXAlignment = LEFT, Text = "",
+	}, props), kids)
+end
+
+local function btn(props, kids)
+	return new("TextButton", merge({
+		AutoButtonColor = false, BorderSizePixel = 0, Text = "", BackgroundColor3 = T.surface2,
+		Font = F.GothamMedium, TextColor3 = T.text, TextSize = 12,
+	}, props), kids)
+end
+
+local function round(r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r) })
+end
+
+local function outline(color, th, tr)
+	return new("UIStroke", {
+		Color = color or T.stroke, Thickness = th or 1, Transparency = tr or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+local function padding(l, t, r, b)
+	t = t or l; r = r or l; b = b or t
+	return new("UIPadding", {
+		PaddingLeft = UDim.new(0, l), PaddingTop = UDim.new(0, t),
+		PaddingRight = UDim.new(0, r), PaddingBottom = UDim.new(0, b),
+	})
+end
+
+local function lista(gap, dir, align)
+	return new("UIListLayout", {
+		Padding = UDim.new(0, gap or 0), SortOrder = Enum.SortOrder.LayoutOrder,
+		FillDirection = dir or Enum.FillDirection.Vertical,
+		HorizontalAlignment = align or Enum.HorizontalAlignment.Left,
+	})
+end
+
+local function tw(o, t, props, style, dir)
+	local tween = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+	tween:Play()
+	return tween
+end
+
+local function hoverFX(b, normal, over)
+	b.MouseEnter:Connect(function() tw(b, 0.12, { BackgroundColor3 = over }) end)
+	b.MouseLeave:Connect(function() tw(b, 0.12, { BackgroundColor3 = normal }) end)
+end
+
+local function makeDraggable(root, handle)
+	local dragging, dragStart, startPos = false, nil, nil
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = root.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local d = input.Position - dragStart
+			root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		end
+	end)
+end
+
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local oldGui = PlayerGui:FindFirstChild("DynamicHandsGUI")
+if oldGui then oldGui:Destroy() end
+
+local MainGui = new("ScreenGui", {
+	Name = "DynamicHandsGUI", ResetOnSpawn = false, IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 10, Parent = PlayerGui,
+})
+
+-- escala um painel para caber em telas pequenas
+local function ajustarEscala(uiScale, w, h)
+	local function aplicar()
+		local vp = MainGui.AbsoluteSize
+		if vp.X <= 0 or vp.Y <= 0 then return end
+		uiScale.Scale = math.min(1, (vp.X - 24) / w, (vp.Y - 24) / h)
+	end
+	MainGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(aplicar)
+	aplicar()
+end
+
+-- =======================================================================
+-- PREVIEW DO BONECO (ViewportFrame) — usado no menu e no painel DEV
+-- =======================================================================
+-- C0/C1 padrão dos joints do R6 (fixos: o preview não depende mais dos joints do personagem real)
+local J_R6 = {
+	root = { CFrame.new(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0), CFrame.new(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0) },
+	neck = { CFrame.new(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0), CFrame.new(0, -0.5, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0) },
+	rs = { CFrame.new(1, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0), CFrame.new(-0.5, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0) },
+	ls = { CFrame.new(-1, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0), CFrame.new(0.5, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0) },
+	rh = { CFrame.new(1, -1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0), CFrame.new(0.5, 1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0) },
+	lh = { CFrame.new(-1, -1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0), CFrame.new(-0.5, 1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0) },
+}
+
+local function aplicarJ(j, p0, p1, transform)
+	p1.CFrame = p0.CFrame * j[1] * transform * j[2]:Inverse()
+end
+
+local CORPO_R6 = { Head = true, Torso = true, ["Right Arm"] = true, ["Left Arm"] = true, ["Right Leg"] = true, ["Left Leg"] = true }
+
+local function criarPreview(viewport)
+	local self = {}
+	local cam = Instance.new("Camera")
+	cam.FieldOfView = 38
+	cam.Parent = viewport
+	viewport.CurrentCamera = cam
+	viewport.Ambient = Color3.fromRGB(150, 150, 168)
+	viewport.LightColor = Color3.fromRGB(255, 252, 246)
+	viewport.LightDirection = Vector3.new(-0.35, -0.55, 0.9)
+
+	local rig, rigChar = nil, nil
+	local emote, custom, active = nil, false, false
+	local theta, dist = 0.35, 9.5
+	local lastTry = 0
+	local CENTRO = Vector3.new(0, -0.4, 0)
+
+	local function destruir()
+		if rig then rig.model:Destroy() end
+		rig, rigChar = nil, nil
+	end
+
+	local function limparJoints(raiz)
+		for _, d in ipairs(raiz:GetDescendants()) do
+			if d:IsA("JointInstance") or d:IsA("WeldConstraint") or d:IsA("BaseScript") or d:IsA("Sound")
+				or d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") or d:IsA("Fire") or d:IsA("Smoke")
+				or d:IsA("Sparkles") or d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+				d:Destroy()
+			end
+		end
+	end
+
+	local function prepararPeca(p)
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Massless = true
+		p.LocalTransparencyModifier = 0
+	end
+
+	local function clonar(inst)
+		local wasArch = inst.Archivable
+		inst.Archivable = true
+		local ok, c = pcall(function() return inst:Clone() end)
+		inst.Archivable = wasArch
+		if ok then return c end
+		return nil
+	end
+
+	-- monta um boneco R6 NOVO só com as peças do corpo + acessórios + roupas.
+	-- Todas as posições são calculadas aqui (joints padrão do R6 e attachments), nada vem do mundo.
+	local function construir()
+		destruir()
+		local char = LocalPlayer.Character
+		if not char then return end
+
+		local model = Instance.new("Model")
+		model.Name = "PreviewRig"
+		local pt = {}
+
+		for nome in pairs(CORPO_R6) do
+			local src = char:FindFirstChild(nome)
+			if not (src and src:IsA("BasePart")) then model:Destroy() return end
+			local c = clonar(src)
+			if not c then model:Destroy() return end
+			limparJoints(c)
+			prepararPeca(c)
+			c.Transparency = 0
+			c.CFrame = CFrame.new()
+			c.Parent = model
+			pt[nome] = c
+		end
+
+		-- roupas / cores
+		for _, ch in ipairs(char:GetChildren()) do
+			if ch:IsA("Shirt") or ch:IsA("Pants") or ch:IsA("ShirtGraphic") or ch:IsA("BodyColors") or ch:IsA("CharacterMesh") then
+				local c = clonar(ch)
+				if c then c.Parent = model end
+			end
+		end
+
+		-- acessórios: posicionados pelos attachments (Handle <-> peça do corpo com o mesmo nome)
+		local accs = {}
+		for _, a in ipairs(char:GetChildren()) do
+			if a:IsA("Accessory") then
+				local ac = clonar(a)
+				local handle = ac and ac:FindFirstChild("Handle")
+				if handle and handle:IsA("BasePart") then
+					limparJoints(ac)
+					for _, d in ipairs(ac:GetDescendants()) do
+						if d:IsA("BasePart") then prepararPeca(d) end
+					end
+					prepararPeca(handle)
+					local achou = nil
+					for _, att in ipairs(handle:GetChildren()) do
+						if att:IsA("Attachment") then
+							for _, parte in pairs(pt) do
+								local b = parte:FindFirstChild(att.Name)
+								if b and b:IsA("Attachment") then
+									achou = { handle = handle, body = parte, ba = b.CFrame, ha = att.CFrame }
+									break
+								end
+							end
+						end
+						if achou then break end
+					end
+					if achou then
+						table.insert(accs, achou)
+						ac.Parent = model
+					else
+						ac:Destroy()
+					end
+				elseif ac then
+					ac:Destroy()
+				end
+			end
+		end
+
+		-- Humanoid só por causa das roupas/rosto; sem nome, sem vida visível
+		local hum = Instance.new("Humanoid")
+		hum.RigType = Enum.HumanoidRigType.R6
+		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		hum.Parent = model
+
+		local function mk(size, brace, isPalma)
+			local p = pecaDoMembro(brace, size, isPalma)
+			prepararPeca(p)
+			p.Parent = model
+			return p
+		end
+
+		local function criarMao(brace, ehDireito)
+			local h = { arm = brace, ehDireito = ehDireito, palma = mk(PALMA_SIZE, brace, true), dedos = {} }
+			for id = 1, 5 do
+				h.dedos[id] = {
+					base = mk(CONFIG_DEDOS[id].tampBase, brace, false),
+					ponta = mk(CONFIG_DEDOS[id].tampPonta, brace, false),
+					ab = 0, ap = 0,
+				}
+				if JUNTA_ATIVA then
+					local j = juntaDoMembro(brace)
+					for _, cunha in ipairs(j) do
+						prepararPeca(cunha)
+						cunha.Parent = model
+					end
+					h.dedos[id].junta = j
+				end
+			end
+			return h
+		end
+
+		rig = {
+			model = model, pt = pt, accs = accs,
+			hands = { criarMao(pt["Right Arm"], true), criarMao(pt["Left Arm"], false) },
+			cur = { R = CFrame.new(), L = CFrame.new(), N = CFrame.new(), B = CFrame.new(), PR = CFrame.new(), PL = CFrame.new() },
+		}
+		rigChar = char
+		model.Parent = viewport
+		-- o motor pode criar welds automáticos de acessório ao parentear: tira todos
+		limparJoints(model)
+		task.defer(function() if model.Parent then limparJoints(model) end end)
+		print(("[Preview] boneco montado: %d acessórios"):format(#accs))
+	end
+
+	local function alvo(cf, w)
+		return CFrame.new():Lerp(cf, clamp(w, 0, 1))
+	end
+
+	local function atualizar()
+		local t = tick()
+		local P
+		if custom then
+			P = calcularPoseCustom()
+		else
+			P = calcularPoseEmote(emote, t, false)
+		end
+
+		local c = rig.cur
+		c.R = c.R:Lerp(alvo(P.R, P.wR), 0.25)
+		c.L = c.L:Lerp(alvo(P.L, P.wL), 0.25)
+		c.N = c.N:Lerp(alvo(P.N, P.wN), 0.25)
+		c.B = c.B:Lerp(alvo(P.B, P.wB), 0.25)
+		c.PR = c.PR:Lerp(alvo(P.PR, P.wP), 0.25)
+		c.PL = c.PL:Lerp(alvo(P.PL, P.wP), 0.25)
+
+		local pt = rig.pt
+		pt.Torso.CFrame = J_R6.root[1] * c.B * J_R6.root[2]:Inverse()
+		aplicarJ(J_R6.rs, pt.Torso, pt["Right Arm"], c.R)
+		aplicarJ(J_R6.ls, pt.Torso, pt["Left Arm"], c.L)
+		aplicarJ(J_R6.neck, pt.Torso, pt.Head, c.N)
+		aplicarJ(J_R6.rh, pt.Torso, pt["Right Leg"], c.PR)
+		aplicarJ(J_R6.lh, pt.Torso, pt["Left Leg"], c.PL)
+
+		for _, a in ipairs(rig.accs) do
+			a.handle.CFrame = a.body.CFrame * a.ba * a.ha:Inverse()
+		end
+
+		for _, h in ipairs(rig.hands) do
+			if h then
+				local pm = h.ehDireito and customPose.direita or customPose.esquerda
+				local ativo
+				if h.ehDireito then ativo = animConfig.direita else ativo = animConfig.esquerda end
+				local palmaCF = h.arm.CFrame * CFrame.new(0, -1.0, 0)
+				local modoCustom = custom and ativo
+				if modoCustom then
+					palmaCF = palmaCF * CFrame.Angles(rad(pm.palma.x), rad(pm.palma.y), rad(pm.palma.z))
+				end
+				h.palma.CFrame = palmaCF
+
+				for id = 1, 5 do
+					local d = h.dedos[id]
+					local alvoB, alvoP = 0, 0
+					local afast = 0
+					local ext = nil
+					if modoCustom then
+						alvoB, alvoP = pm.dedos[id][1], pm.dedos[id][2]
+						afast = afastGraus(id, h.ehDireito, pm.afastamento)
+						ext = pm.dedos[id]
+					elseif (not custom) and emote then
+						local b, p = alvoDedosEmote(emote, id, h.ehDireito)
+						alvoB, alvoP = b or 0, p or 0
+						ext = extraDedoEmote(emote, id, h.ehDireito)
+					else
+						local curva = (id == 1) and 3 or (id * 3)
+						alvoB = curva + sin(t * 2 - id * 0.3) * 3
+						alvoP = curva * 0.8 + cos(t * 2 - id * 0.3) * 2
+					end
+					d.ab = d.ab + (alvoB - d.ab) * SMOOTH_FACTOR
+					d.ap = d.ap + (alvoP - d.ap) * SMOOTH_FACTOR
+					local baseCF, pontaCF, pivotCF = calcFingerCFrames(id, h.ehDireito, d.ab, d.ap, afast, ext)
+					d.base.CFrame = palmaCF * baseCF
+					d.ponta.CFrame = palmaCF * pontaCF
+					if d.junta then
+						local cf1, s1, cf2, s2 = calcJuntaCFrames(id, h.ehDireito, d.ap, palmaCF * pivotCF)
+						d.junta[1].Size, d.junta[1].CFrame = s1, cf1
+						d.junta[2].Size, d.junta[2].CFrame = s2, cf2
+					end
+				end
+			end
+		end
+	end
+
+	RunService.RenderStepped:Connect(function()
+		if not active or not viewport.Visible or viewport.AbsoluteSize.X <= 0 then return end
+
+		if (not rig) or rigChar ~= LocalPlayer.Character or not rigChar.Parent then
+			if tick() - lastTry < 0.5 then return end
+			lastTry = tick()
+			construir()
+			if not rig then return end
+		end
+
+		local pos = CENTRO + Vector3.new(sin(theta), 0.12, -cos(theta)).Unit * dist
+		cam.CFrame = CFrame.lookAt(pos, CENTRO)
+		atualizar()
+	end)
+
+	-- arrastar = girar, scroll = zoom
+	local arrastando = false
+	viewport.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			arrastando = true
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			arrastando = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if arrastando and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			theta = theta - input.Delta.X * 0.012
+		end
+	end)
+	viewport.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseWheel then
+			dist = clamp(dist - input.Position.Z * 0.8, 5, 16)
+		end
+	end)
+
+	function self.setEmote(nome) emote = nome end
+	function self.setCustom(b) custom = b end
+	function self.setActive(b) active = b end
+	function self.resetCamera() theta, dist = 0.35, 9.5 end
+	function self.rebuild() lastTry = 0; destruir() end
+	return self
+end
+
+local function novoViewport(props)
+	return new("ViewportFrame", merge({
+		BackgroundColor3 = T.surface, BorderSizePixel = 0, Ambient = Color3.fromRGB(150, 150, 168),
+	}, props), { round(10) })
+end
+
+-- =======================================================================
+-- REGISTRO DE EMOTES / FAVORITOS / AÇÕES
+-- =======================================================================
+local EMOTES = {
+	{ nome = "Tchau", icone = "👋", cat = "Cumprimentos" },
+	{ nome = "Paz", icone = "✌️", cat = "Cumprimentos" },
+	{ nome = "Sim", icone = "🙂", cat = "Gestos" },
+	{ nome = "Maçaneta", icone = "😏", cat = "Gestos" },
+	{ nome = "Apontar", icone = "👉", cat = "Gestos", toggle = true },
+	{ nome = "Bow", icone = "🙇", cat = "Reverências" },
+	{ nome = "Dedo", icone = "🖕", cat = "+18" },
+	{ nome = "Citação", icone = "👌", cat = "+18" },
+	{ nome = "Sentido", icone = "🎖️", cat = "Gestos" },
+	{ nome = "Convidando", icone = "😈", cat = "+18" },
+	{ nome = "Dancinha", icone = "💃", cat = "Gestos", toggle = true },
+	{ nome = "Cala a Boca", icone = "🤫", cat = "Gestos" },
+	{ nome = "Braços Cruzados", icone = "😒", cat = "Gestos", toggle = true },
+	{ nome = "Deitado de Frente", icone = "🐾", cat = "Gestos", toggle = true },
+	{ nome = "Sentar", icone = "🪑", cat = "Gestos", toggle = true },
+	{ nome = "Ajoelhar", icone = "🧎", cat = "Gestos", toggle = true },
+	{ nome = "Dormir", icone = "🛌", cat = "Gestos", toggle = true },
+	{ nome = "Dormir2", icone = "🛏️", cat = "Gestos", toggle = true },
+}
+local EMOTE_POR_NOME = {}
+for _, e in ipairs(EMOTES) do EMOTE_POR_NOME[e.nome] = e end
+
+local favList = { "Tchau", "Bow", "Paz" }
+local favSet = {}
+for _, n in ipairs(favList) do favSet[n] = true end
+
+local ativoRefreshers = {}
+local favRefreshers = {}
+
+local function refreshAtivos()
+	for _, f in ipairs(ativoRefreshers) do f() end
+end
+
+local function emoteAtivo(nome)
+	if nome == "Apontar" then return apontarCamera end
+	if EMOTES_TOGGLE[nome] then return currentEmote == nome and emoteTimer > 0 end
+	return currentEmote == nome and (emoteTimer > 0 or freezeEmote)
+end
+
+local function tocarEmote(nome)
+	if nome == "Apontar" then
+		apontarCamera = not apontarCamera
+		if apontarCamera then
+			currentEmote = nil
+			emoteTimer = 0
+		end
+	elseif EMOTES_TOGGLE[nome] then
+		-- toggle: liga e fica até você desligar (boneco imóvel enquanto ativo)
+		if currentEmote == nome and emoteTimer > 0 then
+			currentEmote = nil
+			emoteTimer = 0
+		else
+			currentEmote = nome
+			emoteTimer = math.huge
+		end
+	else
+		currentEmote = nome
+		emoteTimer = emoteDuration
+	end
+	refreshAtivos()
+end
+
+local function toggleFav(nome)
+	if favSet[nome] then
+		favSet[nome] = nil
+		local i = table.find(favList, nome)
+		if i then table.remove(favList, i) end
+	else
+		favSet[nome] = true
+		table.insert(favList, nome)
+	end
+	for _, f in ipairs(favRefreshers) do f() end
+end
+
+-- =======================================================================
+-- MENU PRINCIPAL (grade + preview ao passar o mouse)
+-- =======================================================================
+local toggleMenu
+do
+local MENU_W, MENU_H = 480, 300
+local menuAberto = false
+local catAtual = "Todos"
+local CATEGORIAS = { "Todos", "Favoritos", "Gestos", "Cumprimentos", "Reverências", "+18" }
+
+local Menu = new("CanvasGroup", {
+	Name = "EmoteMenu", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(MENU_W, MENU_H), BackgroundColor3 = T.bg, GroupTransparency = 1,
+	Visible = false, Parent = MainGui,
+}, { round(18), outline(T.stroke, 1, 0.1) })
+local menuScale = new("UIScale", { Parent = Menu })
+ajustarEscala(menuScale, MENU_W, MENU_H)
+
+txt({ Text = "Emotes", Font = F.GothamBold, TextSize = 17, Position = UDim2.fromOffset(16, 10), Size = UDim2.fromOffset(200, 22), Parent = Menu })
+txt({ Text = "Passe o mouse para ver o preview", TextSize = 10, TextColor3 = T.dim, Position = UDim2.fromOffset(16, 32), Size = UDim2.fromOffset(300, 14), Parent = Menu })
+
+local closeMenuBtn = btn({
+	Text = "✕", TextSize = 13, TextColor3 = T.sub, Size = UDim2.fromOffset(26, 26), Position = UDim2.new(1, -38, 0, 10), Parent = Menu,
+}, { round(13) })
+hoverFX(closeMenuBtn, T.surface2, T.surface3)
+
+-- chips de categoria
+local chipsBar = frame({ BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 54), Size = UDim2.new(1, -32, 0, 24), Parent = Menu }, {
+	lista(6, Enum.FillDirection.Horizontal),
+})
+local chipRefs = {}
+
+-- grade
+local GridScroll = new("ScrollingFrame", {
+	BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(16, 88), Size = UDim2.new(0, 286, 1, -88 - 34),
+	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3,
+	ScrollBarImageColor3 = T.stroke, Parent = Menu,
+}, {
+	new("UIGridLayout", { CellSize = UDim2.fromOffset(84, 88), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	padding(2, 2, 6, 6),
+})
+local semFavLabel = txt({
+	Text = "Nenhum favorito ainda.\nToque na ★ de um emote para fixar.", TextWrapped = true, TextSize = 12, TextColor3 = T.dim,
+	TextXAlignment = CENTER, Position = UDim2.fromOffset(16, 120), Size = UDim2.fromOffset(286, 40), Visible = false, Parent = Menu,
+})
+
+-- painel de preview
+local previewPane = frame({
+	Position = UDim2.fromOffset(MENU_W - 16 - 150, 54), Size = UDim2.new(0, 150, 1, -54 - 34), Parent = Menu,
+}, { round(14), outline(T.stroke, 1, 0.5) })
+local previewVP = novoViewport({ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 136), BackgroundColor3 = T.bg, Parent = previewPane })
+local menuPreview = criarPreview(previewVP)
+local previewNome = txt({ Text = "—", Font = F.GothamBold, TextSize = 14, Position = UDim2.fromOffset(12, 148), Size = UDim2.new(1, -24, 0, 18), Parent = previewPane })
+local previewCat = txt({ Text = "", TextSize = 11, TextColor3 = T.dim, Position = UDim2.fromOffset(12, 166), Size = UDim2.new(1, -24, 0, 14), Parent = previewPane })
+
+txt({
+	Text = "Segure  G  para abrir a roda", TextSize = 10, TextColor3 = T.dim,
+	Position = UDim2.new(0, 16, 1, -24), Size = UDim2.new(1, -32, 0, 14), Parent = Menu,
+})
+
+local function mostrarPreview(e)
+	if not e then return end
+	previewNome.Text = e.icone .. "  " .. e.nome
+	previewCat.Text = e.cat .. (e.toggle and " • liga/desliga" or "")
+	menuPreview.setEmote(e.nome)
+end
+
+local cardRefs = {}
+
+local function passaFiltro(e)
+	if catAtual == "Todos" then return true end
+	if catAtual == "Favoritos" then return favSet[e.nome] == true end
+	return e.cat == catAtual
+end
+
+local function atualizarCards()
+	for nome, r in pairs(cardRefs) do
+		local ativo = emoteAtivo(nome)
+		r.card.BackgroundColor3 = ativo and T.accentSoft or T.surface
+		r.stroke.Color = ativo and T.accent or T.stroke
+		r.stroke.Transparency = ativo and 0 or 0.5
+		r.dot.Visible = ativo
+		r.star.Text = favSet[nome] and "★" or "☆"
+		r.star.TextColor3 = favSet[nome] and T.warn or T.dim
+	end
+end
+
+local function construirCards()
+	for _, c in ipairs(GridScroll:GetChildren()) do
+		if c:IsA("GuiObject") then c:Destroy() end
+	end
+	cardRefs = {}
+	local n = 0
+	for i, e in ipairs(EMOTES) do
+		if passaFiltro(e) then
+			n += 1
+			local card = btn({ BackgroundColor3 = T.surface, LayoutOrder = i, Parent = GridScroll }, { round(14) })
+			local st = outline(T.stroke, 1, 0.5)
+			st.Parent = card
+			txt({ Text = e.icone, TextSize = 26, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 10), Size = UDim2.new(1, 0, 0, 34), Parent = card })
+			txt({ Text = e.nome, Font = F.GothamMedium, TextSize = 11, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 48), Size = UDim2.new(1, 0, 0, 16), Parent = card })
+			txt({ Text = e.cat, TextSize = 9, TextColor3 = T.dim, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 65), Size = UDim2.new(1, 0, 0, 14), Parent = card })
+			local dot = frame({ BackgroundColor3 = T.ok, Size = UDim2.fromOffset(8, 8), Position = UDim2.fromOffset(10, 10), Visible = false, Parent = card }, { round(4) })
+			local star = btn({
+				BackgroundTransparency = 1, Text = "☆", TextSize = 16, Size = UDim2.fromOffset(26, 26),
+				Position = UDim2.new(1, -28, 0, 2), ZIndex = 3, Parent = card,
+			})
+			star.MouseButton1Click:Connect(function() toggleFav(e.nome) end)
+			card.MouseEnter:Connect(function()
+				if not emoteAtivo(e.nome) then tw(card, 0.12, { BackgroundColor3 = T.surface2 }) end
+				mostrarPreview(e)
+			end)
+			card.MouseLeave:Connect(function() atualizarCards() end)
+			card.MouseButton1Click:Connect(function()
+				tocarEmote(e.nome)
+				task.defer(function() toggleMenu(false) end)
+			end)
+			cardRefs[e.nome] = { card = card, stroke = st, dot = dot, star = star }
+		end
+	end
+	semFavLabel.Visible = (n == 0 and catAtual == "Favoritos")
+	atualizarCards()
+end
+
+local function atualizarChips()
+	for nome, r in pairs(chipRefs) do
+		local sel = (nome == catAtual)
+		r.BackgroundColor3 = sel and T.accent or T.surface2
+		r.TextColor3 = sel and Color3.new(1, 1, 1) or T.sub
+	end
+end
+
+for i, nome in ipairs(CATEGORIAS) do
+	local chip = btn({
+		Text = nome, TextSize = 10, Font = F.GothamMedium, AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0), LayoutOrder = i, Parent = chipsBar,
+	}, { round(12), padding(10, 0, 10, 0) })
+	chip.MouseButton1Click:Connect(function()
+		catAtual = nome
+		atualizarChips()
+		construirCards()
+	end)
+	chipRefs[nome] = chip
+end
+atualizarChips()
+
+table.insert(ativoRefreshers, atualizarCards)
+table.insert(favRefreshers, function() construirCards() end)
+
+function toggleMenu(abrir)
+	if abrir == nil then abrir = not menuAberto end
+	if abrir == menuAberto then return end
+	menuAberto = abrir
+	if abrir then
+		Menu.Visible = true
+		Menu.Position = UDim2.new(0.5, 0, 0.5, 14)
+		Menu.GroupTransparency = 1
+		tw(Menu, 0.22, { GroupTransparency = 0, Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quint)
+		construirCards()
+		menuPreview.setActive(true)
+		menuPreview.setCustom(false)
+		mostrarPreview(EMOTE_POR_NOME[currentEmote or ""] or EMOTES[1])
+	else
+		tw(Menu, 0.16, { GroupTransparency = 1, Position = UDim2.new(0.5, 0, 0.5, 10) })
+		menuPreview.setActive(false)
+		task.delay(0.17, function()
+			if not menuAberto then Menu.Visible = false end
+		end)
+	end
+end
+closeMenuBtn.MouseButton1Click:Connect(function() toggleMenu(false) end)
+end -- fim do bloco do menu
+
+-- =======================================================================
+-- RODA RADIAL (segure G, aponte, solte)
+-- =======================================================================
+local abrirWheel, fecharWheel
+do
+local WHEEL = 320
+local WHEEL_R = 114
+local wheelAberta = false
+local wheelSel = nil
+
+local Wheel = new("CanvasGroup", {
+	Name = "EmoteWheel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(WHEEL, WHEEL), BackgroundTransparency = 1, GroupTransparency = 1, Visible = false, Parent = MainGui,
+})
+local wheelScale = new("UIScale", { Parent = Wheel })
+ajustarEscala(wheelScale, WHEEL + 20, WHEEL + 20)
+
+frame({
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(WHEEL_R * 2, WHEEL_R * 2),
+	BackgroundColor3 = T.bg, BackgroundTransparency = 0.18, Parent = Wheel,
+}, { round(999), outline(T.stroke, 1.5, 0.3) })
+
+local centro = frame({
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(96, 96),
+	BackgroundColor3 = T.surface, Parent = Wheel,
+}, { round(999), outline(T.accent, 1.5, 0.35) })
+local wIcone = txt({ Text = "🎭", TextSize = 24, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 14), Size = UDim2.new(1, 0, 0, 30), Parent = centro })
+local wNome = txt({ Text = "Emotes", Font = F.GothamBold, TextSize = 12, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 46), Size = UDim2.new(1, 0, 0, 16), Parent = centro })
+local wHint = txt({ Text = "aponte e solte", TextSize = 9, TextColor3 = T.dim, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 63), Size = UDim2.new(1, 0, 0, 12), Parent = centro })
+
+local wheelItens = {}
+for i, e in ipairs(EMOTES) do
+	local a = (i - 1) * (2 * math.pi / #EMOTES)
+	local item = btn({
+		AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = T.surface,
+		Size = UDim2.fromOffset(62, 62),
+		Position = UDim2.new(0.5, sin(a) * WHEEL_R, 0.5, -cos(a) * WHEEL_R), Parent = Wheel,
+	}, { round(999) })
+	local st = outline(T.stroke, 1.5, 0.3)
+	st.Parent = item
+	txt({ Text = e.icone, TextSize = 21, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), Parent = item })
+	txt({ Text = e.nome, Font = F.GothamMedium, TextSize = 9, TextXAlignment = CENTER, TextColor3 = T.sub, Position = UDim2.fromOffset(0, 36), Size = UDim2.new(1, 0, 0, 14), Parent = item })
+	item.MouseButton1Click:Connect(function()
+		tocarEmote(e.nome)
+		wheelAberta = false
+		wheelSel = nil
+		tw(Wheel, 0.12, { GroupTransparency = 1 })
+		task.delay(0.13, function() if not wheelAberta then Wheel.Visible = false end end)
+	end)
+	wheelItens[i] = { item = item, stroke = st }
+end
+
+local function wheelSelecionar(idx)
+	if idx == wheelSel then return end
+	wheelSel = idx
+	for i, w in ipairs(wheelItens) do
+		local sel = (i == idx)
+		tw(w.item, 0.1, { BackgroundColor3 = sel and T.accent or T.surface, Size = UDim2.fromOffset(sel and 72 or 62, sel and 72 or 62) })
+		w.stroke.Color = sel and Color3.new(1, 1, 1) or T.stroke
+		w.stroke.Transparency = sel and 0.2 or 0.3
+	end
+	if idx then
+		wIcone.Text = EMOTES[idx].icone
+		wNome.Text = EMOTES[idx].nome
+		wHint.Text = "solte para usar"
+	else
+		wIcone.Text = "🎭"
+		wNome.Text = "Emotes"
+		wHint.Text = "aponte e solte"
+	end
+end
+
+function abrirWheel()
+	if wheelAberta then return end
+	wheelAberta = true
+	toggleMenu(false)
+	Wheel.Visible = true
+	wheelSelecionar(nil)
+	tw(Wheel, 0.15, { GroupTransparency = 0 })
+end
+
+function fecharWheel(confirmar)
+	if not wheelAberta then return end
+	wheelAberta = false
+	if confirmar and wheelSel then tocarEmote(EMOTES[wheelSel].nome) end
+	wheelSelecionar(nil)
+	tw(Wheel, 0.12, { GroupTransparency = 1 })
+	task.delay(0.13, function() if not wheelAberta then Wheel.Visible = false end end)
+end
+
+RunService.RenderStepped:Connect(function()
+	if not wheelAberta then return end
+	local mouse = UserInputService:GetMouseLocation()
+	local c = Wheel.AbsolutePosition + Wheel.AbsoluteSize / 2
+	local d = mouse - c
+	local escala = math.max(wheelScale.Scale, 0.01)
+	if d.Magnitude < 36 * escala then
+		wheelSelecionar(nil)
+		return
+	end
+	local ang = math.atan2(d.X, -d.Y)
+	if ang < 0 then ang += 2 * math.pi end
+	local fatia = 2 * math.pi / #EMOTES
+	local idx = (math.floor((ang + fatia / 2) / fatia) % #EMOTES) + 1
+	wheelSelecionar(idx)
+end)
+
+table.insert(ativoRefreshers, function()
+	for i, w in ipairs(wheelItens) do
+		if i ~= wheelSel then
+			w.stroke.Color = emoteAtivo(EMOTES[i].nome) and T.ok or T.stroke
+		end
+	end
+end)
+
+end -- fim do bloco da roda
+
+-- =======================================================================
+-- BOTÕES FLUTUANTES (Emotes / Dropar)
+-- =======================================================================
+local EmoteButton = btn({
+	Text = "✦  Emotes", Font = F.GothamBold, TextSize = 13, BackgroundColor3 = T.accent, TextColor3 = Color3.new(1, 1, 1),
+	AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 64), Size = UDim2.fromOffset(112, 38), Parent = MainGui,
+}, { round(19) })
+hoverFX(EmoteButton, T.accent, Color3.fromRGB(148, 134, 255))
+EmoteButton.MouseButton1Click:Connect(function() toggleMenu() end)
+
+local DropButton = btn({
+	Text = "Dropar  (R)", Font = F.GothamBold, TextSize = 12, BackgroundColor3 = T.danger, TextColor3 = Color3.new(1, 1, 1),
+	AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 110), Size = UDim2.fromOffset(112, 34),
+	BackgroundTransparency = 1, TextTransparency = 1, Visible = false, Parent = MainGui,
+}, { round(17) })
+
+local function toggleDropButton(visible)
+	if visible and DropButton.BackgroundTransparency == 1 then
+		DropButton.Visible = true
+		tw(DropButton, 0.25, { BackgroundTransparency = 0, TextTransparency = 0 })
+	elseif not visible and DropButton.BackgroundTransparency == 0 then
+		local t = tw(DropButton, 0.25, { BackgroundTransparency = 1, TextTransparency = 1 })
+		t.Completed:Connect(function() DropButton.Visible = false end)
+	end
+end
+
+-- atualiza o destaque do emote ativo (inclui expiração do timer)
+local acumAtivo = 0
+RunService.Heartbeat:Connect(function(dt)
+	acumAtivo += dt
+	if acumAtivo >= 0.15 then
+		acumAtivo = 0
+		refreshAtivos()
+	end
+end)
+
+-- =======================================================================
+-- PAINEL DEV (;dvmn)
+-- =======================================================================
+do
+local DEV_W, DEV_H = 320, 548
+local devTab = "Bracos"
+local currentHand = "direita"
+local secOpen = {}
+local rebuildTab -- forward
+
+local DevPanel = frame({
+	Name = "DevPanel", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(DEV_W, DEV_H),
+	BackgroundColor3 = T.bg, Visible = false, Parent = MainGui,
+}, { round(16), outline(T.stroke, 1, 0.1) })
+local devScale = new("UIScale", { Parent = DevPanel })
+ajustarEscala(devScale, DEV_W + 24, DEV_H + 24)
+
+-- cabeçalho (arrastável)
+local devHead = frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52), Parent = DevPanel })
+makeDraggable(DevPanel, devHead)
+local badge = frame({ BackgroundColor3 = Color3.fromRGB(64, 48, 14), Size = UDim2.fromOffset(40, 22), Position = UDim2.fromOffset(14, 15), Parent = devHead }, { round(7) })
+txt({ Text = "DEV", Font = F.GothamBold, TextSize = 11, TextColor3 = T.warn, TextXAlignment = CENTER, Size = UDim2.fromScale(1, 1), Parent = badge })
+txt({ Text = "Editor de pose", Font = F.GothamBold, TextSize = 14, Position = UDim2.fromOffset(64, 8), Size = UDim2.new(1, -160, 0, 20), Parent = devHead })
+local devTitle = txt({ Text = "—", TextSize = 11, TextColor3 = T.sub, Position = UDim2.fromOffset(64, 28), Size = UDim2.new(1, -160, 0, 16), Parent = devHead })
+
+local trocarBtn = btn({ Text = "⇄", TextSize = 15, TextColor3 = T.sub, Size = UDim2.fromOffset(30, 30), Position = UDim2.new(1, -78, 0, 11), Parent = devHead }, { round(15) })
+local closeDevBtn = btn({ Text = "✕", TextSize = 13, TextColor3 = T.sub, Size = UDim2.fromOffset(30, 30), Position = UDim2.new(1, -42, 0, 11), Parent = devHead }, { round(15) })
+hoverFX(trocarBtn, T.surface2, T.surface3)
+hoverFX(closeDevBtn, T.surface2, T.danger)
+
+-- ---------- STATUS ----------
+local statusCard = frame({ Position = UDim2.fromOffset(12, 56), Size = UDim2.new(1, -24, 0, 186), Parent = DevPanel }, { round(12), outline(T.stroke, 1, 0.5) })
+txt({ Text = "STATUS", Font = F.GothamBold, TextSize = 10, TextColor3 = T.dim, Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(80, 14), Parent = statusCard })
+local liveDot = frame({ BackgroundColor3 = T.ok, Size = UDim2.fromOffset(6, 6), Position = UDim2.new(1, -62, 0, 12), Parent = statusCard }, { round(3) })
+txt({ Text = "ao vivo", TextSize = 10, TextColor3 = T.dim, Position = UDim2.new(1, -52, 0, 8), Size = UDim2.fromOffset(44, 14), Parent = statusCard })
+
+local function criarColunaStatus(titulo, x, ehDireito)
+	local col = frame({ BackgroundColor3 = T.surface2, Position = UDim2.new(x, x == 0 and 8 or 3, 0, 28), Size = UDim2.new(0.5, -11, 0, 100), Parent = statusCard }, { round(9) })
+	local dot = frame({ BackgroundColor3 = T.ok, Size = UDim2.fromOffset(6, 6), Position = UDim2.fromOffset(9, 9), Parent = col }, { round(3) })
+	txt({ Text = titulo, Font = F.GothamBold, TextSize = 10, Position = UDim2.fromOffset(20, 4), Size = UDim2.fromOffset(70, 14), Parent = col })
+	local afs = txt({ Font = F.Code, TextSize = 10, TextColor3 = T.dim, TextXAlignment = RIGHT, Position = UDim2.new(1, -60, 0, 4), Size = UDim2.fromOffset(52, 14), Parent = col })
+	local lines = txt({
+		Font = F.Code, TextSize = 10, TextColor3 = T.sub, TextYAlignment = Enum.TextYAlignment.Top, RichText = true,
+		Position = UDim2.fromOffset(9, 22), Size = UDim2.new(1, -18, 0, 50), Parent = col,
+	})
+	local bars = frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 9, 1, -22), Size = UDim2.new(1, -18, 0, 18), Parent = col }, { lista(3, Enum.FillDirection.Horizontal) })
+	local fills = {}
+	for i = 1, 5 do
+		local bg = frame({ BackgroundColor3 = T.surface3, Size = UDim2.new(0.2, -3, 1, 0), LayoutOrder = i, Parent = bars }, { round(3) })
+		fills[i] = frame({ BackgroundColor3 = T.accent, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), Parent = bg }, { round(3) })
+	end
+	return { dot = dot, lines = lines, afs = afs, fills = fills, ehDireito = ehDireito }
+end
+
+local colDir = criarColunaStatus("DIREITA", 0, true)
+local colEsq = criarColunaStatus("ESQUERDA", 0.5, false)
+local statusFoot = txt({
+	Font = F.Code, TextSize = 10, TextColor3 = T.sub, RichText = true,
+	Position = UDim2.new(0, 12, 1, -54), Size = UDim2.new(1, -24, 0, 46), Parent = statusCard,
+})
+
+local function hex(c) return c:ToHex() end
+local function f0(n) return string.format("%4.0f", n) end
+
+local function pintarColuna(col, pose, ativo)
+	col.dot.BackgroundColor3 = ativo and T.ok or T.danger
+	local ax = { hex(T.ax[1]), hex(T.ax[2]), hex(T.ax[3]) }
+	local function tri(a, b, c, fmt)
+		return string.format('<font color="#%s">' .. fmt .. '</font><font color="#%s">' .. fmt .. '</font><font color="#%s">' .. fmt .. '</font>', ax[1], a, ax[2], b, ax[3], c)
+	end
+	local b, p = pose.braco, pose.palma
+	col.afs.Text = string.format("AFS %.0f", pose.afastamento)
+	-- dedos com rotação/posição extra (EXT) ficam listados e a barra muda de cor
+	local extras = {}
+	for i = 1, 5 do
+		if dedoTemExtra(pose.dedos[i]) then extras[#extras + 1] = tostring(i) end
+	end
+	col.lines.Text = string.format(
+		"ROT %s\nPOS %s\nPLM %s\nEXT %s",
+		tri(b.x, b.y, b.z, "%4.0f"),
+		tri(b.px, b.py, b.pz, "%5.1f"),
+		tri(p.x, p.y, p.z, "%4.0f"),
+		#extras > 0 and ('<font color="#' .. hex(T.warn) .. '">' .. table.concat(extras, " ") .. "</font>") or "—"
+	)
+	for i = 1, 5 do
+		local v = (pose.dedos[i][1] + pose.dedos[i][2]) / 180
+		col.fills[i].Size = UDim2.fromScale(1, clamp(v, 0, 1))
+		col.fills[i].BackgroundColor3 = dedoTemExtra(pose.dedos[i]) and T.warn or T.accent
+	end
+end
+
+local function parteFoot(nome, t, ligado)
+	local cor = ligado and hex(T.text) or hex(T.dim)
+	return string.format('<font color="#%s">%s %.0f,%.0f,%.0f</font>', cor, nome, t.x, t.y, t.z)
+end
+
+-- perna: rotação + posição (px,py,pz) no status
+local function parteFootPerna(nome, t, ligado)
+	local cor = ligado and hex(T.text) or hex(T.dim)
+	return string.format('<font color="#%s">%s %.0f,%.0f,%.0f | %.2f,%.2f,%.2f</font>', cor, nome, t.x, t.y, t.z, t.px or 0, t.py or 0, t.pz or 0)
+end
+
+local acumStatus = 0
+RunService.RenderStepped:Connect(function(dt)
+	if not DevPanel.Visible then return end
+	acumStatus += dt
+	if acumStatus < 0.08 then return end
+	acumStatus = 0
+	pintarColuna(colDir, customPose.direita, animConfig.direita)
+	pintarColuna(colEsq, customPose.esquerda, animConfig.esquerda)
+	statusFoot.Text = parteFoot("TOR", customPose.torso, animConfig.torso) .. "  "
+		.. parteFoot("CAB", customPose.cabeca, animConfig.cabeca) .. "\n"
+		.. parteFootPerna("PD", customPose.pernaDir, animConfig.pernas) .. "\n"
+		.. parteFootPerna("PE", customPose.pernaEsq, animConfig.pernas)
+end)
+
+-- ---------- ABAS ----------
+local TABS = {
+	{ id = "Bracos", nome = "Braços" },
+	{ id = "Maos", nome = "Mãos" },
+	{ id = "Torso", nome = "Torso" },
+	{ id = "Cabeca", nome = "Cabeça" },
+	{ id = "Pernas", nome = "Pernas" },
+}
+local tabBar = frame({ BackgroundColor3 = T.surface, Position = UDim2.fromOffset(12, 250), Size = UDim2.new(1, -24, 0, 34), Parent = DevPanel }, { round(10), padding(3), lista(2, Enum.FillDirection.Horizontal) })
+local tabBtns = {}
+for i, tb in ipairs(TABS) do
+	local b = btn({ Text = tb.nome, Font = F.GothamBold, TextSize = 11, BackgroundTransparency = 1, TextColor3 = T.sub, Size = UDim2.new(0.2, -2, 1, 0), LayoutOrder = i, Parent = tabBar }, { round(8) })
+	b.MouseButton1Click:Connect(function()
+		devTab = tb.id
+		rebuildTab()
+	end)
+	tabBtns[tb.id] = b
+end
+
+local Content = new("ScrollingFrame", {
+	BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(12, 292), Size = UDim2.new(1, -24, 1, -292 - 62),
+	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3, ScrollBarImageColor3 = T.stroke,
+	Parent = DevPanel,
+}, { lista(8), padding(0, 0, 6, 4) })
+
+-- ---------- COMPONENTES ----------
+local activeSlider = nil
+UserInputService.InputChanged:Connect(function(input)
+	if activeSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		activeSlider(input.Position.X)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		activeSlider = nil
+	end
+end)
+
+local function criarSlider(parent, o)
+	local dec = o.dec or 0
+	local mult = 10 ^ dec
+	local function arred(v) return math.floor(v * mult + 0.5) / mult end
+	local cor = o.axis and T.ax[o.axis] or T.accent
+
+	local c = frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), LayoutOrder = o.order or 0, Parent = parent })
+	local x0 = 0
+	if o.axis then
+		local chip = frame({ BackgroundColor3 = cor, BackgroundTransparency = 0.78, Size = UDim2.fromOffset(18, 18), Parent = c }, { round(5) })
+		txt({ Text = ({ "X", "Y", "Z" })[o.axis], Font = F.GothamBold, TextSize = 10, TextColor3 = cor, TextXAlignment = CENTER, Size = UDim2.fromScale(1, 1), Parent = chip })
+		x0 = 26
+	end
+	txt({ Text = o.label, TextSize = 11, TextColor3 = T.sub, Position = UDim2.fromOffset(x0, 0), Size = UDim2.new(1, -(x0 + 62), 0, 18), Parent = c })
+	local box = new("TextBox", {
+		BackgroundColor3 = T.surface3, BorderSizePixel = 0, Font = F.Code, TextSize = 11, TextColor3 = T.text,
+		ClearTextOnFocus = false, Size = UDim2.fromOffset(54, 20), Position = UDim2.new(1, -54, 0, -1), Parent = c,
+	}, { round(6) })
+
+	local track = frame({ BackgroundColor3 = T.surface3, Size = UDim2.new(1, 0, 0, 6), Position = UDim2.fromOffset(0, 28), Parent = c }, { round(3) })
+	local fill = frame({ BackgroundColor3 = cor, Size = UDim2.fromScale(0, 1), Parent = track }, { round(3) })
+	local knob = frame({ BackgroundColor3 = Color3.new(1, 1, 1), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14), Position = UDim2.fromScale(0, 0.5), Parent = track }, { round(7) })
+
+	local function visual(v)
+		local r = clamp((v - o.min) / (o.max - o.min), 0, 1)
+		fill.Size = UDim2.fromScale(r, 1)
+		knob.Position = UDim2.fromScale(r, 0.5)
+		box.Text = string.format("%." .. dec .. "f", v)
+	end
+	visual(o.value)
+
+	local function porX(x)
+		local r = clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+		local v = arred(o.min + r * (o.max - o.min))
+		visual(v)
+		o.onChange(v)
+	end
+
+	local hit = btn({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 20), Parent = c })
+	hit.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			activeSlider = porX
+			porX(input.Position.X)
+		end
+	end)
+	box.FocusLost:Connect(function()
+		local n = tonumber(box.Text)
+		if n then
+			n = arred(clamp(n, o.min, o.max))
+			visual(n)
+			o.onChange(n)
+		else
+			box.Text = string.format("%." .. dec .. "f", o.value)
+		end
+	end)
+	return c
+end
+
+local function criarToggle(parent, texto, get, set, order)
+	local row = frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), LayoutOrder = order or 0, Parent = parent })
+	txt({ Text = texto, TextSize = 12, Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, -52, 1, 0), Parent = row })
+	local sw = btn({ BackgroundColor3 = get() and T.ok or T.surface3, Size = UDim2.fromOffset(38, 20), Position = UDim2.new(1, -38, 0.5, -10), Parent = row }, { round(10) })
+	local knob = frame({ BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.fromOffset(14, 14), Position = get() and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7), Parent = sw }, { round(7) })
+	sw.MouseButton1Click:Connect(function()
+		set(not get())
+		local on = get()
+		tw(sw, 0.15, { BackgroundColor3 = on and T.ok or T.surface3 })
+		tw(knob, 0.15, { Position = on and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7) })
+	end)
+	return row
+end
+
+local function criarSegmentado(parent, opcoes, atual, onSelect, order)
+	local seg = frame({ BackgroundColor3 = T.surface, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = order or 0, Parent = parent }, { round(10), padding(3), lista(3, Enum.FillDirection.Horizontal) })
+	for i, op in ipairs(opcoes) do
+		local sel = (op.id == atual)
+		local b = btn({
+			Text = op.nome, Font = F.GothamBold, TextSize = 11, BackgroundColor3 = sel and T.accent or T.surface,
+			BackgroundTransparency = sel and 0 or 1, TextColor3 = sel and Color3.new(1, 1, 1) or T.sub,
+			Size = UDim2.new(1 / #opcoes, -3, 1, 0), LayoutOrder = i, Parent = seg,
+		}, { round(8) })
+		b.MouseButton1Click:Connect(function() onSelect(op.id) end)
+	end
+	return seg
+end
+
+local function criarSecao(parent, key, titulo, cor, order, abertaPadrao)
+	if secOpen[key] == nil then secOpen[key] = (abertaPadrao ~= false) end
+	local wrap = frame({
+		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order or 0, Parent = parent,
+	}, { round(12), outline(T.stroke, 1, 0.55), lista(0) })
+	local head = btn({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 36), LayoutOrder = 1, Parent = wrap })
+	frame({ BackgroundColor3 = cor or T.accent, Size = UDim2.fromOffset(3, 14), Position = UDim2.fromOffset(12, 11), Parent = head }, { round(2) })
+	txt({ Text = titulo, Font = F.GothamBold, TextSize = 11, Position = UDim2.fromOffset(24, 0), Size = UDim2.new(1, -50, 1, 0), Parent = head })
+	local chev = txt({ Text = secOpen[key] and "▾" or "▸", TextSize = 12, TextColor3 = T.dim, TextXAlignment = RIGHT, Size = UDim2.new(1, -12, 1, 0), Parent = head })
+	local body = frame({
+		BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 2,
+		Visible = secOpen[key], Parent = wrap,
+	}, { padding(12, 2, 12, 12), lista(6) })
+	head.MouseButton1Click:Connect(function()
+		secOpen[key] = not secOpen[key]
+		body.Visible = secOpen[key]
+		chev.Text = secOpen[key] and "▾" or "▸"
+	end)
+	return body
+end
+
+local function seletorMao(parent, order)
+	return criarSegmentado(parent, { { id = "direita", nome = "Mão direita" }, { id = "esquerda", nome = "Mão esquerda" } }, currentHand, function(id)
+		currentHand = id
+		rebuildTab()
+	end, order)
+end
+
+-- ---------- ESPELHAR (direita <-> esquerda) ----------
+-- regras: braço/palma/perna -> X igual, Y e Z invertidos; posição lateral do braço (px) e
+-- frente/trás da perna (px) invertidas; dedos e afastamento copiados iguais (a mão esquerda
+-- já espelha os extras dos dedos sozinha no calcFingerCFrames)
+local espelhar = false
+
+local function espelharPose(maoOrigem, pernaOrigem)
+	if not espelhar then return end
+	if maoOrigem then
+		local de = customPose[maoOrigem]
+		local para = customPose[maoOrigem == "direita" and "esquerda" or "direita"]
+		local b, d = de.braco, para.braco
+		d.x, d.y, d.z = b.x, 0 - b.y, 0 - b.z
+		d.px, d.py, d.pz = 0 - (b.px or 0), b.py or 0, b.pz or 0
+		para.palma.x, para.palma.y, para.palma.z = de.palma.x, 0 - de.palma.y, 0 - de.palma.z
+		para.afastamento = de.afastamento
+		for i = 1, 5 do
+			for k = 1, 8 do para.dedos[i][k] = de.dedos[i][k] or 0 end
+		end
+	end
+	if pernaOrigem then
+		local de = customPose[pernaOrigem]
+		local para = customPose[pernaOrigem == "pernaDir" and "pernaEsq" or "pernaDir"]
+		para.x, para.y, para.z = de.x, 0 - de.y, 0 - de.z
+		para.px, para.py, para.pz = 0 - (de.px or 0), de.py or 0, de.pz or 0
+	end
+end
+
+-- chamado depois de qualquer slider da mão/braço selecionado
+local function ecoMao() espelharPose(currentHand, nil) end
+
+local function slidersRot(parent, getTabela, dec, min, max, labels, prefix, aoMudar)
+	for i, eixo in ipairs({ "x", "y", "z" }) do
+		criarSlider(parent, {
+			label = labels[i], axis = i, min = min, max = max, dec = dec, order = i,
+			value = getTabela()[prefix and (prefix .. eixo) or eixo],
+			onChange = function(v) getTabela()[prefix and (prefix .. eixo) or eixo] = v; if aoMudar then aoMudar() end end,
+		})
+	end
+end
+
+local ROT_LABELS = { "Pitch — frente / trás", "Yaw — para os lados", "Roll — girar" }
+
+-- botão "Resetar <parte>" no topo de cada aba (LayoutOrder 0 = sempre primeiro)
+local function botaoResetParte(parte, rotulo)
+	local b = btn({
+		Text = "⟲  Resetar " .. rotulo, Font = F.GothamBold, TextSize = 11, TextColor3 = T.sub,
+		BackgroundColor3 = T.surface2, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 0, Parent = Content,
+	}, { round(9), outline(T.stroke, 1, 0.3) })
+	hoverFX(b, T.surface2, T.surface3)
+	b.MouseButton1Click:Connect(function()
+		if resetarParte(parte) then rebuildTab() end
+	end)
+	return b
+end
+
+-- ---------- CONTEÚDO POR CATEGORIA ----------
+local function montarBracos()
+	botaoResetParte("bracos", "braços")
+	local S1 = criarSecao(Content, "br_ativ", "ATIVAÇÃO", T.ok, 1)
+	criarToggle(S1, "Animar braço direito", function() return animConfig.direita end, function(v) animConfig.direita = v end, 1)
+	criarToggle(S1, "Animar braço esquerdo", function() return animConfig.esquerda end, function(v) animConfig.esquerda = v end, 2)
+	seletorMao(Content, 2)
+	local pose = customPose[currentHand]
+	local S2 = criarSecao(Content, "br_rot", "ROTAÇÃO DO BRAÇO", T.ax[1], 3)
+	slidersRot(S2, function() return pose.braco end, 0, -180, 180, ROT_LABELS, nil, ecoMao)
+	local S3 = criarSecao(Content, "br_pos", "POSIÇÃO DO BRAÇO", T.ax[3], 4)
+	for i, k in ipairs({ "px", "py", "pz" }) do
+		criarSlider(S3, {
+			label = ({ "Lado", "Cima / baixo", "Frente / trás" })[i], axis = i, min = -2, max = 2, dec = 2, order = i,
+			value = pose.braco[k], onChange = function(v) pose.braco[k] = v; ecoMao() end,
+		})
+	end
+end
+
+local function montarMaos()
+	botaoResetParte("maos", "mãos e dedos")
+	seletorMao(Content, 1)
+	local pose = customPose[currentHand]
+	local S1 = criarSecao(Content, "mao_palma", "PALMA", T.ax[2], 2)
+	slidersRot(S1, function() return pose.palma end, 0, -180, 180, ROT_LABELS, nil, ecoMao)
+	local S2 = criarSecao(Content, "mao_afast", "ABERTURA DOS DEDOS", T.warn, 3)
+	criarSlider(S2, { label = "Afastamento total", min = 0, max = 90, dec = 0, value = pose.afastamento, onChange = function(v) pose.afastamento = v; ecoMao() end })
+	for i = 1, 5 do
+		local S = criarSecao(Content, "dedo" .. i, "DEDO " .. i .. " — " .. string.upper(NOMES_DEDOS[i]), T.accent, 3 + i, false)
+		criarSlider(S, { label = "Base", min = 0, max = 90, order = 1, value = pose.dedos[i][1], onChange = function(v) pose.dedos[i][1] = v; ecoMao() end })
+		criarSlider(S, { label = "Ponta", min = 0, max = 90, order = 2, value = pose.dedos[i][2], onChange = function(v) pose.dedos[i][2] = v; ecoMao() end })
+		-- rotação extra (graus) e posição extra (studs) do dedo em relação à palma
+		local ROT_DEDO = { "Rot X — abrir / fechar lado", "Rot Y — girar no eixo", "Rot Z — dobrar extra" }
+		local POS_DEDO = { "Pos X — dentro / fora", "Pos Y — punho / ponta", "Pos Z — entre dedos" }
+		for k = 1, 3 do
+			criarSlider(S, {
+				label = ROT_DEDO[k], axis = k, min = -90, max = 90, dec = 0, order = 2 + k,
+				value = pose.dedos[i][2 + k] or 0, onChange = function(v) pose.dedos[i][2 + k] = v; ecoMao() end,
+			})
+		end
+		for k = 1, 3 do
+			criarSlider(S, {
+				label = POS_DEDO[k], axis = k, min = -0.5, max = 0.5, dec = 2, order = 5 + k,
+				value = pose.dedos[i][5 + k] or 0, onChange = function(v) pose.dedos[i][5 + k] = v; ecoMao() end,
+			})
+		end
+	end
+end
+
+local function montarTorso()
+	botaoResetParte("torso", "torso")
+	local S1 = criarSecao(Content, "to_ativ", "ATIVAÇÃO", T.ok, 1)
+	criarToggle(S1, "Controlar torso", function() return animConfig.torso end, function(v) animConfig.torso = v end, 1)
+	local S2 = criarSecao(Content, "to_rot", "ROTAÇÃO DO TORSO", T.ax[1], 2)
+	slidersRot(S2, function() return customPose.torso end, 0, -90, 90, ROT_LABELS)
+end
+
+local function montarCabeca()
+	botaoResetParte("cabeca", "cabeça")
+	local S1 = criarSecao(Content, "ca_ativ", "ATIVAÇÃO", T.ok, 1)
+	criarToggle(S1, "Controlar cabeça", function() return animConfig.cabeca end, function(v) animConfig.cabeca = v end, 1)
+	local S2 = criarSecao(Content, "ca_rot", "ROTAÇÃO DA CABEÇA", T.ax[1], 2)
+	slidersRot(S2, function() return customPose.cabeca end, 0, -90, 90, { "Pitch — olhar cima / baixo", "Yaw — virar", "Roll — inclinar" })
+end
+
+local function slidersPosPerna(parent, getTabela, aoMudar)
+	local t = getTabela()
+	for i, k in ipairs({ "px", "py", "pz" }) do
+		criarSlider(parent, {
+			label = ({ "Frente / trás", "Cima / baixo", "Lado" })[i], axis = i, min = -2, max = 2, dec = 2, order = 3 + i,
+			value = t[k] or 0, onChange = function(v) getTabela()[k] = v; if aoMudar then aoMudar() end end,
+		})
+	end
+end
+
+local function montarPernas()
+	botaoResetParte("pernas", "pernas")
+	local S1 = criarSecao(Content, "pe_ativ", "ATIVAÇÃO", T.ok, 1)
+	criarToggle(S1, "Controlar pernas", function() return animConfig.pernas end, function(v) animConfig.pernas = v end, 1)
+	local S2 = criarSecao(Content, "pe_dir", "ROTAÇÃO — PERNA DIREITA", T.ax[1], 2)
+	slidersRot(S2, function() return customPose.pernaDir end, 0, -90, 90, ROT_LABELS, nil, function() espelharPose(nil, "pernaDir") end)
+	local S3 = criarSecao(Content, "pe_esq", "ROTAÇÃO — PERNA ESQUERDA", T.ax[3], 3)
+	slidersRot(S3, function() return customPose.pernaEsq end, 0, -90, 90, ROT_LABELS, nil, function() espelharPose(nil, "pernaEsq") end)
+	local S4 = criarSecao(Content, "pe_dir_pos", "POSIÇÃO — PERNA DIREITA", T.ax[1], 4)
+	slidersPosPerna(S4, function() return customPose.pernaDir end, function() espelharPose(nil, "pernaDir") end)
+	local S5 = criarSecao(Content, "pe_esq_pos", "POSIÇÃO — PERNA ESQUERDA", T.ax[3], 5)
+	slidersPosPerna(S5, function() return customPose.pernaEsq end, function() espelharPose(nil, "pernaEsq") end)
+end
+
+local MONTADORES = { Bracos = montarBracos, Maos = montarMaos, Torso = montarTorso, Cabeca = montarCabeca, Pernas = montarPernas }
+
+function rebuildTab()
+	for _, c in ipairs(Content:GetChildren()) do
+		if c:IsA("GuiObject") then c:Destroy() end
+	end
+	for id, b in pairs(tabBtns) do
+		local sel = (id == devTab)
+		b.BackgroundTransparency = sel and 0 or 1
+		b.BackgroundColor3 = T.accent
+		b.TextColor3 = sel and Color3.new(1, 1, 1) or T.sub
+	end
+	Content.CanvasPosition = Vector2.new(0, 0)
+	MONTADORES[devTab]()
+end
+
+-- ---------- RODAPÉ ----------
+local devFoot = frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 12, 1, -54), Size = UDim2.new(1, -24, 0, 42), Parent = DevPanel }, { lista(8, Enum.FillDirection.Horizontal) })
+local resetBtn = btn({ Text = "Resetar pose", Font = F.GothamBold, TextSize = 12, Size = UDim2.new(0.22, -6, 1, 0), LayoutOrder = 1, Parent = devFoot }, { round(11), outline(T.stroke, 1, 0.3) })
+local exportBtn = btn({ Text = "Exportar", Font = F.GothamBold, TextSize = 12, BackgroundColor3 = T.accent, TextColor3 = Color3.new(1, 1, 1), Size = UDim2.new(0.32, -6, 1, 0), LayoutOrder = 4, Parent = devFoot }, { round(11) })
+hoverFX(resetBtn, T.surface2, T.surface3)
+local desfazerBtn = btn({ Text = "Desfazer", Font = F.GothamBold, TextSize = 12, Size = UDim2.new(0.2, -6, 1, 0), LayoutOrder = 2, Parent = devFoot }, { round(11), outline(T.stroke, 1, 0.3) })
+hoverFX(desfazerBtn, T.surface2, T.surface3)
+hoverFX(exportBtn, T.accent, Color3.fromRGB(148, 134, 255))
+
+-- botão ESPELHAR: liga/desliga o espelho direita <-> esquerda (braço, mão, dedos e pernas)
+local espelharBtn = btn({ Text = "Espelhar", Font = F.GothamBold, TextSize = 12, Size = UDim2.new(0.26, -6, 1, 0), LayoutOrder = 3, Parent = devFoot }, { round(11), outline(T.stroke, 1, 0.3) })
+local function pintarEspelhar()
+	espelharBtn.BackgroundColor3 = espelhar and T.ok or T.surface2
+	espelharBtn.TextColor3 = espelhar and T.bg or T.sub
+	espelharBtn.Text = espelhar and "Espelhar ✓" or "Espelhar"
+end
+pintarEspelhar()
+espelharBtn.MouseButton1Click:Connect(function()
+	espelhar = not espelhar
+	pintarEspelhar()
+	if espelhar then
+		-- ao ligar: o lado selecionado (mão) e a perna direita viram a referência
+		espelharPose(currentHand, "pernaDir")
+		rebuildTab()
+	end
+end)
+
+-- ---------- EXPORTAR (Lua pronto pra colar em defaultEmotes) ----------
+local function fmt(n)
+	n = math.floor(n * 100 + 0.5) / 100 + 0
+	return tostring(n)
+end
+
+local function gerarLua()
+	local function v3(t) return string.format("{ x = %s, y = %s, z = %s }", fmt(t.x), fmt(t.y), fmt(t.z)) end
+	local function br(t) return string.format("{ x = %s, y = %s, z = %s, px = %s, py = %s, pz = %s }", fmt(t.x), fmt(t.y), fmt(t.z), fmt(t.px or 0), fmt(t.py or 0), fmt(t.pz or 0)) end
+	local function dedos(h)
+		local s = {}
+		for i = 1, 5 do
+			local d = h.dedos[i]
+			if dedoTemExtra(d) then
+				-- { base, ponta, rotX, rotY, rotZ, posX, posY, posZ }
+				s[i] = string.format("{%s,%s,%s,%s,%s,%s,%s,%s}", fmt(d[1]), fmt(d[2]), fmt(d[3] or 0), fmt(d[4] or 0), fmt(d[5] or 0), fmt(d[6] or 0), fmt(d[7] or 0), fmt(d[8] or 0))
+			else
+				s[i] = string.format("{%s,%s}", fmt(d[1]), fmt(d[2]))
+			end
+		end
+		return "{ " .. table.concat(s, ", ") .. " }"
+	end
+	local D, E = customPose.direita, customPose.esquerda
+	return string.format(
+		'["%s"] = {\n\tdir = %s, palmaDir = %s,\n\tdedosDir = %s, afastDir = %s,\n\tesq = %s, palmaEsq = %s,\n\tdedosEsq = %s, afastEsq = %s,\n\tcabeca = %s, torso = %s,\n\tpernaDir = %s, pernaEsq = %s\n},',
+		currentEmote or "Nenhum",
+		br(D.braco), v3(D.palma), dedos(D), fmt(D.afastamento),
+		br(E.braco), v3(E.palma), dedos(E), fmt(E.afastamento),
+		v3(customPose.cabeca), v3(customPose.torso), br(customPose.pernaDir), br(customPose.pernaEsq)
+	)
+end
+
+local ExportModal = frame({
+	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 20, Parent = DevPanel,
+}, { round(16) })
+local exportCard = frame({
+	BackgroundColor3 = T.surface, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -28, 0, 330), ZIndex = 21, Parent = ExportModal,
+}, { round(14), outline(T.stroke, 1, 0.1) })
+txt({ Text = "Exportar pose", Font = F.GothamBold, TextSize = 14, Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 20), ZIndex = 22, Parent = exportCard })
+txt({ Text = "Selecione tudo e copie. Cole dentro de defaultEmotes.\nDedo: {base, ponta} ou {base, ponta, rotX, rotY, rotZ, posX, posY, posZ}", TextSize = 11, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top, Position = UDim2.fromOffset(16, 32), Size = UDim2.new(1, -32, 0, 30), ZIndex = 22, Parent = exportCard })
+local exportBox = new("TextBox", {
+	BackgroundColor3 = T.bg, BorderSizePixel = 0, Font = F.Code, TextSize = 10, TextColor3 = T.ok, TextXAlignment = LEFT,
+	TextYAlignment = Enum.TextYAlignment.Top, MultiLine = true, TextEditable = false, ClearTextOnFocus = false, TextWrapped = true,
+	Position = UDim2.fromOffset(14, 68), Size = UDim2.new(1, -28, 1, -122), ZIndex = 22, Parent = exportCard,
+}, { round(8), padding(8) })
+local exportClose = btn({ Text = "Fechar", Font = F.GothamBold, TextSize = 12, Size = UDim2.new(1, -28, 0, 34), Position = UDim2.new(0, 14, 1, -46), ZIndex = 22, Parent = exportCard }, { round(10) })
+hoverFX(exportClose, T.surface2, T.surface3)
+exportClose.MouseButton1Click:Connect(function() ExportModal.Visible = false end)
+
+exportBtn.MouseButton1Click:Connect(function()
+	local s = gerarLua()
+	exportBox.Text = s
+	ExportModal.Visible = true
+	print("========== COPIE A POSE ABAIXO ==========")
+	print(s)
+	print("=========================================")
+end)
+
+resetBtn.MouseButton1Click:Connect(function()
+	if currentEmote and defaultEmotes[currentEmote] then
+		carregarEmote(currentEmote)
+		rebuildTab()
+	end
+end)
+
+-- DESFAZER: volta pra config que você estava mexendo antes do último Resetar pose (ou troca de emote)
+desfazerBtn.MouseButton1Click:Connect(function()
+	local nome = restaurarSnapshotPose()
+	if not nome then return end
+	devTitle.Text = nome
+	prevNome.Text = nome
+	rebuildTab()
+end)
+
+-- =======================================================================
+-- PREVIEW FLUTUANTE DO DEV (canto livre: inferior direito)
+-- =======================================================================
+local PREV_W, PREV_H = 200, 250
+local DevPreviewWin = frame({
+	Name = "DevPreview", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -12), Size = UDim2.fromOffset(PREV_W, PREV_H),
+	BackgroundColor3 = T.bg, Visible = false, Parent = MainGui,
+}, { round(16), outline(T.stroke, 1, 0.1) })
+local prevScale = new("UIScale", { Parent = DevPreviewWin })
+prevScale.Scale = 1
+do
+	local function aplicar()
+		local vp = MainGui.AbsoluteSize
+		if vp.X > 0 then prevScale.Scale = math.min(1, (vp.X - 24) / PREV_W, (vp.Y - 24) / PREV_H) end
+	end
+	MainGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(aplicar)
+	aplicar()
+end
+local prevHead = frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Parent = DevPreviewWin })
+makeDraggable(DevPreviewWin, prevHead)
+txt({ Text = "PREVIEW", Font = F.GothamBold, TextSize = 10, TextColor3 = T.dim, Position = UDim2.fromOffset(16, 8), Size = UDim2.fromOffset(100, 14), Parent = prevHead })
+local prevNome = txt({ Text = "—", Font = F.GothamBold, TextSize = 13, Position = UDim2.fromOffset(16, 21), Size = UDim2.new(1, -70, 0, 16), Parent = prevHead })
+local prevReset = btn({ Text = "⟲", TextSize = 15, TextColor3 = T.sub, Size = UDim2.fromOffset(28, 28), Position = UDim2.new(1, -40, 0, 6), Parent = prevHead }, { round(14) })
+hoverFX(prevReset, T.surface2, T.surface3)
+local devVP = novoViewport({ Position = UDim2.fromOffset(10, 44), Size = UDim2.new(1, -20, 1, -44 - 34), BackgroundColor3 = T.surface, Parent = DevPreviewWin })
+local devPreview = criarPreview(devVP)
+devPreview.setCustom(true)
+prevReset.MouseButton1Click:Connect(function() devPreview.resetCamera() end)
+txt({ Text = "arraste para girar • scroll = zoom", TextSize = 10, TextColor3 = T.dim, TextXAlignment = CENTER, Position = UDim2.new(0, 0, 1, -26), Size = UDim2.new(1, 0, 0, 16), Parent = DevPreviewWin })
+
+-- =======================================================================
+-- SELETOR DE EMOTE (DEV)
+-- =======================================================================
+-- tamanho fixo e compacto; a lista rola dentro dele e o painel escala pra caber na tela
+local SEL_W, SEL_H = 230, 300
+local DevSelector = frame({
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(SEL_W, SEL_H),
+	BackgroundColor3 = T.bg, Visible = false, ZIndex = 30, Parent = MainGui,
+}, { round(14), outline(T.stroke, 1, 0.1), padding(10) })
+local selScale = new("UIScale", { Parent = DevSelector })
+ajustarEscala(selScale, SEL_W + 24, SEL_H + 24)
+local selHead = frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 0), ZIndex = 30, Parent = DevSelector })
+local selList = new("ScrollingFrame", {
+	BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 36), Size = UDim2.new(1, 0, 1, -36),
+	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3,
+	ScrollBarImageColor3 = T.stroke, ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 30, Parent = DevSelector,
+}, { lista(4), padding(0, 0, 6, 2) })
+makeDraggable(DevSelector, selHead)
+local selBadge = frame({ BackgroundColor3 = Color3.fromRGB(64, 48, 14), Size = UDim2.fromOffset(36, 20), Position = UDim2.fromOffset(0, 5), ZIndex = 31, Parent = selHead }, { round(7) })
+txt({ Text = "DEV", Font = F.GothamBold, TextSize = 11, TextColor3 = T.warn, TextXAlignment = CENTER, Size = UDim2.fromScale(1, 1), ZIndex = 32, Parent = selBadge })
+txt({ Text = "Escolha o emote", Font = F.GothamBold, TextSize = 12, Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -80, 1, 0), ZIndex = 31, Parent = selHead })
+local closeSel = btn({ Text = "✕", TextSize = 13, TextColor3 = T.sub, Size = UDim2.fromOffset(26, 26), Position = UDim2.new(1, -26, 0, 2), ZIndex = 31, Parent = selHead }, { round(13) })
+hoverFX(closeSel, T.surface2, T.danger)
+closeSel.MouseButton1Click:Connect(function() DevSelector.Visible = false end)
+
+local function abrirDev(nome)
+	if not carregarEmote(nome) then return end
+	devTitle.Text = nome
+	prevNome.Text = nome
+	DevPanel.Visible = true
+	DevPreviewWin.Visible = true
+	devPreview.setActive(true)
+	ExportModal.Visible = false
+	DevSelector.Visible = false
+	toggleMenu(false)
+	rebuildTab()
+end
+
+local function fecharDev()
+	DevPanel.Visible = false
+	DevPreviewWin.Visible = false
+	devPreview.setActive(false)
+	ExportModal.Visible = false
+	freezeEmote = false
+end
+
+closeDevBtn.MouseButton1Click:Connect(fecharDev)
+trocarBtn.MouseButton1Click:Connect(function() DevSelector.Visible = true end)
+
+local emotesDev = { "Tchau", "Paz", "Sim", "Maçaneta", "Bow", "Dedo", "Citação", "Sentido", "Convidando", "Dancinha", "Cala a Boca", "Braços Cruzados", "Deitado de Frente", "Sentar", "Ajoelhar", "Dormir", "Dormir2" }
+for i, nome in ipairs(emotesDev) do
+	local e = EMOTE_POR_NOME[nome]
+	local row = btn({ BackgroundColor3 = T.surface, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = i, ZIndex = 30, Parent = selList }, { round(8) })
+	txt({ Text = e.icone, TextSize = 15, TextXAlignment = CENTER, Position = UDim2.fromOffset(4, 0), Size = UDim2.fromOffset(26, 30), ZIndex = 31, Parent = row })
+	txt({ Text = nome, Font = F.GothamMedium, TextSize = 12, Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -44, 1, 0), ZIndex = 31, Parent = row })
+	hoverFX(row, T.surface, T.surface3)
+	row.MouseButton1Click:Connect(function() abrirDev(nome) end)
+end
+
+LocalPlayer.Chatted:Connect(function(msg)
+	if string.lower(msg):sub(1, 5) == ";dvmn" then
+		DevSelector.Visible = true
+		toggleMenu(false)
+	end
+end)
+end -- fim do painel DEV
+
+-- =======================================================================
+-- LÓGICA DAS MÃOS (RENDER) — personagem real
+-- =======================================================================
+local function limparAgachamentoBow(character)
+	local humanoid = character:FindFirstChild("Humanoid")
+	if humanoid then
+		local originalHeight = character:GetAttribute("OriginalHipHeight")
+		humanoid.HipHeight = originalHeight or 2
+		humanoid.AutoRotate = true
+		humanoid.PlatformStand = false
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if rootPart then
+		local bodyVelocity = rootPart:FindFirstChild("BowVelocityLock")
+		local bodyGyro = rootPart:FindFirstChild("BowGyroLock")
+		if bodyVelocity then bodyVelocity:Destroy() end
+		if bodyGyro then bodyGyro:Destroy() end
+	end
+end
+
+local function aplicarCorpoBow(character, humanoid, rootPart, comTravas, emote)
+	if not character:GetAttribute("OriginalHipHeight") then
+		character:SetAttribute("OriginalHipHeight", humanoid.HipHeight)
+	end
+
+	-- Sentar / Dormir: só abaixa o boneco; o humanoid segue ativo (sem PlatformStand)
+	local altura = emote and EMOTES_BAIXOS[emote]
+	if altura then
+		humanoid.HipHeight = altura
+		humanoid.AutoRotate = false
+		humanoid.PlatformStand = false
+	else
+		humanoid.HipHeight = 0.5
+		humanoid.AutoRotate = false
+		humanoid.PlatformStand = true
+	end
+
+	if comTravas and rootPart then
+		local bodyVelocity = rootPart:FindFirstChild("BowVelocityLock")
+		local bodyGyro = rootPart:FindFirstChild("BowGyroLock")
+		if not bodyVelocity then
+			bodyVelocity = Instance.new("BodyVelocity")
+			bodyVelocity.Name = "BowVelocityLock"
+			bodyVelocity.MaxForce = Vector3.new(1, 0, 1) * 10000
+			bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+			bodyVelocity.Parent = rootPart
+		end
+		if not bodyGyro then
+			bodyGyro = Instance.new("BodyGyro")
+			bodyGyro.Name = "BowGyroLock"
+			bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+			bodyGyro.D = 1000
+			bodyGyro.P = 10000
+			bodyGyro.CFrame = rootPart.CFrame
+			bodyGyro.Parent = rootPart
+		end
+	end
+end
+
+local function limparMaos()
+	if loopConnectionRender then loopConnectionRender:Disconnect(); loopConnectionRender = nil end
+	if loopConnectionStepped then loopConnectionStepped:Disconnect(); loopConnectionStepped = nil end
+	local antigo = workspace:FindFirstChild("DynamicFingersFolder")
+	if antigo then antigo:Destroy() end
+end
+
+local function calcularEspessuraCabo(tool)
+	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("MeshPart") or tool:FindFirstChildOfClass("Part")
+	if handle then
+		return 90 - clamp(math.min(handle.Size.X, handle.Size.Z) * 35, 10, 60)
+	end
+	return 75
+end
+
+local function tweenValue(current, target, factor)
+	return current + (target - current) * factor
+end
+
+local function criarMaoDinamica(character)
+	limparMaos()
+
+	local rightArm = character:WaitForChild("Right Arm", 2)
+	local leftArm = character:WaitForChild("Left Arm", 2)
+	local torso = character:WaitForChild("Torso", 2)
+	local humanoid = character:WaitForChild("Humanoid", 2)
+	local rootPart = character:WaitForChild("HumanoidRootPart", 2)
+
+	if not rightArm or not leftArm or not humanoid or not rootPart or not torso then return end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "DynamicFingersFolder"
+	folder.Parent = workspace
+
+	local partesMao = {}
+
+	local function criarPeca(tamanho, membro, isPalma)
+		local p = pecaDoMembro(membro, tamanho, isPalma)
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		p.Parent = folder
+		return p
+	end
+
+	local function criarWeld(part0, peca, c0)
+		local w = Instance.new("Weld")
+		w.Part0 = part0
+		w.Part1 = peca
+		w.C0 = c0 or CFrame.new()
+		w.Parent = peca
+		return w
+	end
+
+	local function montarMaoBruta(membro, ehDireito)
+		local palma = criarPeca(PALMA_SIZE, membro, true)
+		local palmaWeld = criarWeld(membro, palma, CFrame.new(0, -1.0, 0))
+
+		for id = 1, 5 do
+			local c = CONFIG_DEDOS[id]
+			local dedoBase = criarPeca(c.tampBase, membro, false)
+			local dedoPonta = criarPeca(c.tampPonta, membro, false)
+
+			local baseWeld = criarWeld(palma, dedoBase)
+			local pontaWeld = criarWeld(palma, dedoPonta)
+
+			local junta, juntaWeld = nil, nil
+			if JUNTA_ATIVA then
+				junta = juntaDoMembro(membro)
+				juntaWeld = {}
+				for i, cunha in ipairs(junta) do
+					cunha.Anchored = false
+					cunha.CanCollide = false
+					cunha.CanQuery = false
+					cunha.CanTouch = false
+					cunha.Massless = true
+					cunha.Parent = folder
+					juntaWeld[i] = criarWeld(palma, cunha)
+				end
+			end
+
+			local trail = nil
+			if ehDireito and id == 2 then
+				local a0 = Instance.new("Attachment", dedoPonta)
+				a0.Position = Vector3.new(0, c.tampPonta.Y / 2, 0)
+				local a1 = Instance.new("Attachment", dedoPonta)
+				a1.Position = Vector3.new(0, -c.tampPonta.Y / 2, 0)
+
+				trail = Instance.new("Trail", dedoPonta)
+				trail.Attachment0 = a0
+				trail.Attachment1 = a1
+				trail.Color = ColorSequence.new(Color3.fromRGB(150, 150, 150))
+				trail.Transparency = NumberSequence.new(0.5, 1)
+				trail.Lifetime = 0.25
+				trail.Enabled = false
+			end
+
+			table.insert(partesMao, {
+				pBase = dedoBase, pPonta = dedoPonta,
+				baseWeld = baseWeld, pontaWeld = pontaWeld, juntaWeld = juntaWeld,
+				palmaWeld = palmaWeld, palma = palma,
+				trail = trail, braco = membro,
+				angBase = 0, angPonta = 0,
+				id = id, ehDireito = ehDireito,
+				origTamanhoPonta = c.tampPonta,
+			})
+		end
+	end
+
+	montarMaoBruta(rightArm, true)
+	montarMaoBruta(leftArm, false)
+
+	local rightShoulder = torso:FindFirstChild("Right Shoulder")
+	local leftShoulder = torso:FindFirstChild("Left Shoulder")
+	local neck = torso:FindFirstChild("Neck")
+	local rightHip = torso:FindFirstChild("Right Hip")
+	local leftHip = torso:FindFirstChild("Left Hip")
+	local rootJoint = rootPart:FindFirstChild("RootJoint")
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { character, folder }
+
+	local atualTargetRight, atualTargetLeft = CFrame.new(), CFrame.new()
+	local atualTargetNeck, atualTargetRoot = CFrame.new(), CFrame.new()
+	local atualTargetHipR, atualTargetHipL = CFrame.new(), CFrame.new()
+
+	loopConnectionStepped = RunService.Stepped:Connect(function(_, dt)
+		if not character or humanoid.Health <= 0 then return end
+
+		local pesoD = molaBracoDireito:update(dt)
+		local pesoE = molaBracoEsquerdo:update(dt)
+		local pesoC = molaCabeca:update(dt)
+		local pesoB = molaCorpo:update(dt)
+		local pesoP = molaPernas:update(dt)
+
+		if rightShoulder and math.abs(pesoD) > 0.001 then
+			rightShoulder.Transform = rightShoulder.Transform:Lerp(atualTargetRight, clamp(pesoD, 0, 1.5))
+		end
+		if leftShoulder and math.abs(pesoE) > 0.001 then
+			leftShoulder.Transform = leftShoulder.Transform:Lerp(atualTargetLeft, clamp(pesoE, 0, 1.5))
+		end
+		if neck and math.abs(pesoC) > 0.001 then
+			neck.Transform = neck.Transform:Lerp(atualTargetNeck, clamp(pesoC, 0, 1.5))
+		end
+		if rootJoint and math.abs(pesoB) > 0.001 then
+			rootJoint.Transform = rootJoint.Transform:Lerp(atualTargetRoot, clamp(pesoB, 0, 1.5))
+		end
+		if math.abs(pesoP) > 0.001 then
+			if rightHip then rightHip.Transform = rightHip.Transform:Lerp(atualTargetHipR, clamp(pesoP, 0, 1.5)) end
+			if leftHip then leftHip.Transform = leftHip.Transform:Lerp(atualTargetHipL, clamp(pesoP, 0, 1.5)) end
+		end
+	end)
+
+	-- ---------- DORMIR: Zzz (vivem dentro de `folder`, então limparMaos() apaga tudo) ----------
+	local dormirFX = nil
+
+	local function dormirLigar()
+		if dormirFX and dormirFX.pasta.Parent then return end
+
+		local pasta = Instance.new("Folder")
+		pasta.Name = "DormirFX"
+		pasta.Parent = folder
+
+		local function peca(nome)
+			local p = Instance.new("Part")
+			p.Name = nome
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Massless = true
+			p.Parent = pasta
+			return p
+		end
+
+		-- âncora invisível dos Zzz
+		local ancora = peca("ZzzAncora")
+		ancora.Size = Vector3.new(0.2, 0.2, 0.2)
+		ancora.Transparency = 1
+
+		local zs = {}
+		for i = 1, DORMIR.zzzQtd do
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "Z" .. i
+			bb.Adornee = ancora
+			bb.Size = UDim2.fromScale(0.5, 0.5)
+			bb.LightInfluence = 0
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 120
+			bb.Parent = ancora
+
+			local lbl = Instance.new("TextLabel")
+			lbl.BackgroundTransparency = 1
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.AnchorPoint = Vector2.new(0.5, 0.5)
+			lbl.Position = UDim2.fromScale(0.5, 0.5)
+			lbl.Text = "Z"
+			lbl.Font = Enum.Font.FredokaOne
+			lbl.TextScaled = true
+			lbl.TextColor3 = DORMIR.zzzCor
+			lbl.TextStrokeColor3 = DORMIR.zzzContorno
+			lbl.TextStrokeTransparency = 0.2
+			lbl.TextTransparency = 1
+			lbl.Parent = bb
+
+			zs[i] = { bb = bb, lbl = lbl }
+		end
+
+		dormirFX = { pasta = pasta, ancora = ancora, zs = zs }
+	end
+
+	local function dormirDesligar()
+		if dormirFX then
+			dormirFX.pasta:Destroy()
+			dormirFX = nil
+		end
+	end
+
+	local function dormirAtualizar(tempo)
+		local fx = dormirFX
+		local head = character:FindFirstChild("Head")
+		if not fx or not head then return end
+
+		-- direção horizontal em que a cabeça aponta (eixo Y do torso deitado)
+		local up = torso.CFrame.UpVector
+		local dir = Vector3.new(up.X, 0, up.Z)
+		if dir.Magnitude < 0.3 then
+			local l = rootPart.CFrame.LookVector
+			dir = Vector3.new(l.X, 0, l.Z)
+		end
+		if dir.Magnitude < 0.001 then dir = Vector3.new(0, 0, -1) end
+		dir = dir.Unit
+		local right = dir:Cross(Vector3.yAxis)
+		local hp = head.Position
+
+		-- Zzz subindo da cabeça, balançando de leve, crescendo e sumindo
+		local origem = hp + Vector3.yAxis * 0.9 + dir * 0.2
+		fx.ancora.CFrame = CFrame.new(origem)
+		local n = #fx.zs
+		for i, z in ipairs(fx.zs) do
+			local fase = (tempo / DORMIR.zzzTempo + (i - 1) / n) % 1
+			local sobe = fase * DORMIR.zzzAltura
+			local lado = sin(fase * 6.28 * 1.5 + i * 1.7) * 0.35 + fase * 0.9
+			z.bb.StudsOffsetWorldSpace = Vector3.yAxis * sobe + right * lado + dir * (fase * 0.4)
+			local tam = 0.5 + (DORMIR.zzzTamanho - 0.5) * fase
+			z.bb.Size = UDim2.fromScale(tam, tam)
+			z.lbl.Rotation = sin(fase * 6.28 * 2 + i) * 12
+			local a = clamp(fase / 0.15, 0, 1) * clamp((1 - fase) / 0.35, 0, 1)
+			z.lbl.TextTransparency = 1 - a
+			z.lbl.TextStrokeTransparency = 1 - a * 0.8
+		end
+	end
+
+	-- trava o boneco parado durante emotes em EMOTES_IMOVEIS (só no cliente)
+	local imovelOrig = nil
+	local corpoAplicado = false
+	local function travarImovel(ligar)
+		if ligar then
+			if not imovelOrig then
+				imovelOrig = {
+					ws = humanoid.WalkSpeed, jp = humanoid.JumpPower,
+					jh = humanoid.JumpHeight, ar = humanoid.AutoRotate,
+				}
+				humanoid.JumpPower = 0
+				humanoid.JumpHeight = 0
+				humanoid.AutoRotate = false
+			end
+			humanoid.WalkSpeed = 0
+		elseif imovelOrig then
+			humanoid.WalkSpeed = imovelOrig.ws
+			humanoid.JumpPower = imovelOrig.jp
+			humanoid.JumpHeight = imovelOrig.jh
+			humanoid.AutoRotate = imovelOrig.ar
+			imovelOrig = nil
+		end
+	end
+
+	loopConnectionRender = RunService.RenderStepped:Connect(function(dt)
+		if not character or not character.Parent or humanoid.Health <= 0 then
+			dormirDesligar()
+			travarImovel(false)
+			limparMaos(); return
+		end
+
+		if typingTimer > 0 then typingTimer -= dt else typingMode = false end
+
+		if emoteTimer > 0 then
+			emoteTimer -= dt
+		else
+			if currentEmote ~= nil then
+				if EMOTES_CORPO[currentEmote] then
+					limparAgachamentoBow(character)
+				end
+			end
+			if not freezeEmote then
+				currentEmote = nil
+			end
+		end
+
+		-- no painel DEV, Sentar/Dormir também travam (igual ao emote principal) pra não deslizar
+		local devBaixo = freezeEmote and currentEmote ~= nil and EMOTES_BAIXOS[currentEmote] ~= nil
+		travarImovel(currentEmote ~= nil and EMOTES_IMOVEIS[currentEmote] == true and ((not freezeEmote and emoteTimer > 0) or devBaixo))
+
+		local tempo = tick()
+
+		if currentEmote ~= nil and DORMIR.emotes[currentEmote] then
+			dormirLigar()
+			dormirAtualizar(tempo)
+		elseif dormirFX then
+			dormirDesligar()
+		end
+
+		local toolEquipada = character:FindFirstChildOfClass("Tool")
+		toggleDropButton(toolEquipada ~= nil)
+
+		local rightGrip = rightArm:FindFirstChild("RightGrip")
+		local leftGrip = leftArm:FindFirstChild("LeftGrip")
+		local segurandoToolRight = (rightGrip ~= nil)
+		local segurandoToolLeft = (leftGrip ~= nil)
+		local anguloAdaptativo = toolEquipada and calcularEspessuraCabo(toolEquipada) or 0
+
+		-- ---------- pose do corpo ----------
+		local P
+		local corpoAtivo = currentEmote ~= nil and EMOTES_CORPO[currentEmote] == true
+		-- saiu de um emote de corpo (toggle desligado ou trocou de emote): destrava
+		if corpoAplicado and not corpoAtivo then
+			limparAgachamentoBow(character)
+			corpoAplicado = false
+		end
+		if freezeEmote and currentEmote then
+			P = calcularPoseCustom()
+			if corpoAtivo then
+				-- Sentar/Dormir no DEV usam as mesmas travas do emote principal (sem deslizar)
+				aplicarCorpoBow(character, humanoid, rootPart, EMOTES_BAIXOS[currentEmote] ~= nil, currentEmote)
+				corpoAplicado = true
+			end
+		elseif currentEmote then
+			P = calcularPoseEmote(currentEmote, tempo, true)
+			if corpoAtivo then
+				aplicarCorpoBow(character, humanoid, rootPart, true, currentEmote)
+				corpoAplicado = true
+			end
+		elseif apontarCamera then
+			P = poseVazia()
+			if animConfig.direita then
+				local camLook = Camera.CFrame.LookVector
+				local charCF = rootPart.CFrame
+
+				local rightComp = camLook:Dot(charCF.RightVector)
+				local upComp = camLook:Dot(charCF.UpVector)
+				local fwdComp = camLook:Dot(charCF.LookVector)
+
+				local pitch = math.atan2(upComp, math.sqrt(rightComp ^ 2 + fwdComp ^ 2))
+				local yaw = math.atan2(rightComp, fwdComp)
+
+				-- limita o apontar a no máximo 90° pra cada lado e pra cima/baixo
+				yaw = clamp(yaw, rad(-APONTAR_MAX_YAW), rad(APONTAR_MAX_YAW))
+				pitch = clamp(pitch, rad(-APONTAR_MAX_PITCH), rad(APONTAR_MAX_PITCH))
+
+				P.wR = 1
+				P.R = CFrame.Angles(0, -yaw, rad(90) + pitch)
+			end
+		else
+			P = poseVazia()
+		end
+
+		molaBracoDireito.t = P.wR
+		molaBracoEsquerdo.t = P.wL
+		molaCabeca.t = P.wN
+		molaCorpo.t = P.wB
+		molaPernas.t = P.wP
+
+		atualTargetRight = atualTargetRight:Lerp(P.R, 0.18)
+		atualTargetLeft = atualTargetLeft:Lerp(P.L, 0.18)
+		atualTargetNeck = atualTargetNeck:Lerp(P.N, 0.18)
+		atualTargetRoot = atualTargetRoot:Lerp(P.B, 0.18)
+		atualTargetHipR = atualTargetHipR:Lerp(P.PR, 0.18)
+		atualTargetHipL = atualTargetHipL:Lerp(P.PL, 0.18)
+
+		-- ---------- dedos ----------
+		local velY = rootPart.Velocity.Y
+		local noAr = (velY > 5 or velY < -15)
+		local velocidade = humanoid.MoveDirection.Magnitude
+		local isRunning = (velocidade > 0 and humanoid.WalkSpeed > 16)
+
+		for _, art in ipairs(partesMao) do
+			if not art.braco or not art.braco.Parent then continue end
+
+			if art.trail then
+				art.trail.Enabled = (currentEmote == "Apontar" or apontarCamera)
+			end
+
+			local alvoBase, alvoPonta = 0, 0
+			local ext = nil
+			local poseMao = art.ehDireito and customPose.direita or customPose.esquerda
+			local bracoAtivo
+			if art.ehDireito then bracoAtivo = animConfig.direita else bracoAtivo = animConfig.esquerda end
+			local modoDev = (freezeEmote and currentEmote ~= nil and bracoAtivo)
+
+			if modoDev then
+				art.palmaWeld.C0 = CFrame.new(0, -1.0, 0) * CFrame.Angles(rad(poseMao.palma.x), rad(poseMao.palma.y), rad(poseMao.palma.z))
+			else
+				local defE = currentEmote and bracoAtivo and defaultEmotes[currentEmote]
+				if defE then
+					local pp = art.ehDireito and defE.palmaDir or defE.palmaEsq
+					art.palmaWeld.C0 = CFrame.new(0, -1.0, 0) * CFrame.Angles(rad(pp.x), rad(pp.y), rad(pp.z))
+				else
+					art.palmaWeld.C0 = CFrame.new(0, -1.0, 0)
+				end
+			end
+
+			if modoDev then
+				local dedoConfig = poseMao.dedos[art.id]
+				alvoBase = dedoConfig[1]
+				alvoPonta = dedoConfig[2]
+				ext = dedoConfig
+
+			elseif currentEmote and bracoAtivo then
+				local b, p = alvoDedosEmote(currentEmote, art.id, art.ehDireito)
+				alvoBase, alvoPonta = b or 0, p or 0
+				ext = extraDedoEmote(currentEmote, art.id, art.ehDireito)
+
+			elseif apontarCamera and bracoAtivo then
+				if art.id == 2 and art.ehDireito then
+					alvoBase, alvoPonta = 0, 0
+				else
+					alvoBase, alvoPonta = 90, 90
+				end
+
+			elseif typingMode and bracoAtivo then
+				alvoBase = math.random(-10, 30)
+				alvoPonta = math.random(-10, 30)
+
+			elseif (art.ehDireito and segurandoToolRight) or (not art.ehDireito and segurandoToolLeft) then
+				if art.id == 1 then
+					alvoBase, alvoPonta = anguloAdaptativo * 0.6, anguloAdaptativo * 0.5
+				else
+					alvoBase, alvoPonta = anguloAdaptativo, anguloAdaptativo * 1.05
+				end
+
+			elseif noAr then
+				alvoBase, alvoPonta = -15, -10
+
+			elseif isRunning then
+				alvoBase = 45 + sin(tempo * 15) * 5
+				alvoPonta = 50 + cos(tempo * 15) * 5
+
+			elseif velocidade > 0 then
+				local curva = (art.id == 1) and 5 or (art.id * 4)
+				local atraso = art.id * 0.25
+				alvoBase = curva + sin(tempo * 10 - atraso) * 12
+				alvoPonta = (curva * 0.8) + cos(tempo * 10 - atraso) * 10
+
+			else
+				local curva = (art.id == 1) and 3 or (art.id * 3)
+				local atraso = art.id * 0.3
+				alvoBase = curva + sin(tempo * 2 - atraso) * 3
+				alvoPonta = (curva * 0.8) + cos(tempo * 2 - atraso) * 2
+			end
+
+			art.angBase = tweenValue(art.angBase, alvoBase, SMOOTH_FACTOR)
+			art.angPonta = tweenValue(art.angPonta, alvoPonta, SMOOTH_FACTOR)
+
+			local afast = 0
+			if modoDev then
+				afast = afastGraus(art.id, art.ehDireito, poseMao.afastamento)
+			end
+
+			local localBaseCF, localPontaCF, localPivotCF = calcFingerCFrames(art.id, art.ehDireito, art.angBase, art.angPonta, afast, ext)
+			art.baseWeld.C0 = localBaseCF
+			if art.juntaWeld then
+				local cf1, s1, cf2, s2 = calcJuntaCFrames(art.id, art.ehDireito, art.angPonta, localPivotCF)
+				art.juntaWeld[1].Part1.Size, art.juntaWeld[1].C0 = s1, cf1
+				art.juntaWeld[2].Part1.Size, art.juntaWeld[2].C0 = s2, cf2
+			end
+
+			local pontaWorldCFrame = art.palma.CFrame * localPontaCF
+			local raio = workspace:Raycast(pontaWorldCFrame.Position, pontaWorldCFrame.UpVector * -0.3, rayParams)
+			if raio then
+				art.pPonta.Size = Vector3.new(art.origTamanhoPonta.X, art.origTamanhoPonta.Y * 0.7, art.origTamanhoPonta.Z)
+				art.pontaWeld.C0 = localPontaCF * CFrame.new(0, art.origTamanhoPonta.Y * 0.15, 0)
+			else
+				art.pPonta.Size = art.origTamanhoPonta
+				art.pontaWeld.C0 = localPontaCF
+			end
+		end
+	end)
+
+	humanoid.Died:Connect(limparMaos)
+end
+
+carregarMeshDedo()
+
+if LocalPlayer.Character then criarMaoDinamica(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(function(char)
+	task.wait(1)
+	criarMaoDinamica(char)
+end)
+
+-- =======================================================================
+-- INPUT
+-- =======================================================================
+local function droparItem()
+	local char = LocalPlayer.Character
+	if char then
+		local rootPart = char:FindFirstChild("HumanoidRootPart")
+		for _, tool in ipairs(char:GetChildren()) do
+			if tool:IsA("Tool") then
+				tool.Parent = workspace
+				if tool:FindFirstChild("Handle") and rootPart then
+					tool.Handle.CFrame = rootPart.CFrame * CFrame.new(0, 0, -2)
+				end
+				return
+			end
+		end
+	end
+end
+
+DropButton.MouseButton1Click:Connect(droparItem)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		typingMode = true
+		typingTimer = 3
+		if input.KeyCode == Enum.KeyCode.R then
+			droparItem()
+		elseif input.KeyCode == WHEEL_KEY then
+			abrirWheel()
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == WHEEL_KEY then
+		fecharWheel(true)
+	end
+end)
