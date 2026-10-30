@@ -39,17 +39,31 @@ local WHEEL_KEY = Enum.KeyCode.G
 
 -- emotes que deixam o boneco parado (sem andar/pular/girar)
 -- emotes que ligam/desligam (ficam até você tocar de novo)
-local EMOTES_TOGGLE = { Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+local EMOTES_TOGGLE = {
+	Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true,
+	Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true, Siririca = true,
+	["Chupada de Dedo"] = true, ["De Quatro"] = true,
+}
 
-local EMOTES_IMOVEIS = { Sentido = true, Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+local EMOTES_IMOVEIS = {
+	Sentido = true, Dancinha = true, ["Braços Cruzados"] = true, ["Deitado de Frente"] = true,
+	Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true, Siririca = true,
+	["Chupada de Dedo"] = true, ["De Quatro"] = true,
+}
 
 -- emotes que mexem no corpo todo (HipHeight/PlatformStand/travas) e precisam de limpeza ao sair
-local EMOTES_CORPO = { Bow = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true }
+local EMOTES_CORPO = {
+	Bow = true, ["Deitado de Frente"] = true, Sentar = true, Ajoelhar = true, Dormir = true, Dormir2 = true,
+	["De Quatro"] = true,
+}
 
 -- emotes que só abaixam o boneco (HipHeight), sem PlatformStand nem travas de física.
 -- valor = HipHeight usado. Ajuste aqui se o boneco ficar afundado ou flutuando.
 -- Sentar: bumbum no chão (-1.5). Dormir / Dormir2: torso deitado rente ao chão (-2.5).
-local EMOTES_BAIXOS = { Sentar = -1.5, Ajoelhar = -1.2, Dormir = -2.5, Dormir2 = -2.5 }
+local EMOTES_BAIXOS = {
+	Sentar = -1.5, Ajoelhar = -1.2, Dormir = -2.5, Dormir2 = -2.5,
+	["De Quatro"] = -0.9,
+}
 
 -- DORMIR (emote Dormir): Zzz animados saindo da cabeça (só aparecem no seu cliente)
 local DORMIR = {
@@ -61,6 +75,47 @@ local DORMIR = {
 	zzzCor = Color3.fromRGB(190, 220, 255),
 	zzzContorno = Color3.fromRGB(45, 75, 150),
 }
+
+-- SIRIRICA: depois de X segundos começa a "gozar" aos poucos (partículas + movimento mais forte)
+local GOZAR = {
+	emotes = { Siririca = true },
+	delay = 10,          -- segundos de siririca até começar a gozar
+	buildup = 12,        -- segundos pra chegar na intensidade máxima (aos poucos)
+	maxRate = 45,        -- taxa máxima de partículas (por segundo)
+	minRate = 3,         -- taxa inicial quando começa
+	partSize = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.14),
+		NumberSequenceKeypoint.new(0.4, 0.22),
+		NumberSequenceKeypoint.new(1, 0.06),
+	}),
+	lifetime = NumberRange.new(0.5, 1.1),
+	-- pinga pra baixo (velocidade baixa + spread pequeno)
+	speed = NumberRange.new(0.8, 2.2),
+	spread = 10,
+	cor = Color3.fromRGB(255, 250, 245),
+	-- textura semi-transparente das partículas no ar
+	texturaParticula = "rbxassetid://128887072856049",
+	-- transparência base (partícula e poça usam a mesma)
+	transparencia = 0.28,
+	-- poça no chão quando "bate"
+	texturaChao = "rbxassetid://116805447475504",
+	pocasMax = 14,           -- quantas poças podem existir ao mesmo tempo
+	pocaDuracao = 4.5,       -- segundos que a poça fica no chão
+	pocaSpawnInterval = 0.16,-- intervalo mínimo entre novas poças
+	pocaTamanhoMin = 0.28,   -- tamanho da poça (studs) — menor
+	pocaTamanhoMax = 0.55,
+	-- intensifica o movimento do braço / corpo depois do delay
+	rubExtra = 0.14,     -- amplitude extra do esfregar (studs)
+	rubVelExtra = 5,     -- velocidade extra do vai-e-vem
+	tremor = 0.035,      -- tremor do torso/cabeça no clímax
+	-- som no nível 3 (clímax = intensidade máxima)
+	soundId = "rbxassetid://122039713538884",
+	soundVolume = 0.5,
+}
+
+-- tempo acumulado no emote Siririca (reseta ao sair)
+local siriricaTempo = 0
+local siriricaSoundPlayed = false -- toca o som do nível 3 só uma vez por ativação
 
 -- vai e vem do emote Citação (braço direito)
 local CITACAO_AMP = 0.3 -- distância do movimento (studs)
@@ -200,6 +255,32 @@ local defaultEmotes = {
 		cabeca = { x = -6, y = 8, z = 0 }, torso = { x = 0, y = 0, z = 0 },
 		pernaDir = { x = -3, y = -12, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = -2, y = 14, z = 0, px = 0, py = 0, pz = 0 }
 	},
+	["Siririca"] = {
+		dir = { x = -84, y = 103, z = 98, px = 0.14, py = 0.14, pz = -0.19 }, palmaDir = { x = 10, y = 4, z = 0 },
+		dedosDir = { {70,55}, {26,46,17,0,0,0,0,0}, {16,50}, {50,60}, {40,50} }, afastDir = 0,
+		esq = { x = 171, y = 180, z = -143, px = 0.61, py = -0.6, pz = -0.36 }, palmaEsq = { x = 0, y = -20, z = -5 },
+		dedosEsq = { {27,32,0,0,30,0,0,0}, {0,80,0,0,90,0,0,0}, {0,65,0,0,75,0,0,0}, {0,60,0,0,52,0,0,0}, {0,39,0,0,11,0,0,0} }, afastEsq = 8,
+		cabeca = { x = 12, y = -5, z = 0 }, torso = { x = -16, y = 0, z = 0, px = 0, py = 0, pz = -1.15 },
+		pernaDir = { x = -19, y = -60, z = -6, px = 0.09, py = 0.86, pz = 0 }, pernaEsq = { x = -19, y = 60, z = 6, px = -0.09, py = 0.91, pz = 0 }
+	},
+	-- Chupada de Dedo: indicador na boca
+	["Chupada de Dedo"] = {
+		dir = { x = 69, y = 96, z = 81, px = 0.05, py = -1.16, pz = -0.39 }, palmaDir = { x = 0, y = 0, z = 0 },
+		dedosDir = { {50,55}, {18,63}, {70,80}, {75,85}, {80,90} }, afastDir = 0,
+		esq = { x = 19, y = -23, z = -12, px = 0.31, py = -0.02, pz = -0.15 }, palmaEsq = { x = 0, y = 0, z = 0 },
+		dedosEsq = { {12,12}, {4,12,-10,0,20,0,0,0}, {12,12,-6,-7,42,0,0,0}, {12,12,-9,-8,39,0,0,0}, {30,9,-5,-23,52,0,0,0} }, afastEsq = 0,
+		cabeca = { x = -8, y = 12, z = 0 }, torso = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
+		pernaDir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }, pernaEsq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 }
+	},
+	-- De Quatro: torso inclinado, joelhos no chão, mãos à frente
+	["De Quatro"] = {
+		dir = { x = -82, y = -16, z = 65, px = 0.12, py = -0.55, pz = -0.18 }, palmaDir = { x = 18, y = 0, z = 0 },
+		dedosDir = { {20,30,0,0,-90,0,0,0}, {25,35,8,2,90,0,0,0}, {25,37,11,-13,81,0,0,0}, {0,37,14,-15,37,0,0,0}, {25,35,0,0,43,0,0,0} }, afastDir = 0,
+		esq = { x = -82, y = 16, z = -65, px = -0.12, py = -0.55, pz = -0.18 }, palmaEsq = { x = 18, y = 0, z = 0 },
+		dedosEsq = { {20,30,0,0,-90,0,0,0}, {25,35,8,2,90,0,0,0}, {25,37,11,-13,81,0,0,0}, {0,37,14,-15,37,0,0,0}, {25,35,0,0,43,0,0,0} }, afastEsq = 0,
+		cabeca = { x = -62, y = 0, z = 0 }, torso = { x = 81, y = 0, z = -1, px = 0, py = 0, pz = -0.74 },
+		pernaDir = { x = -21, y = -90, z = -4, px = 0.01, py = 0.2, pz = 0 }, pernaEsq = { x = -21, y = 90, z = 4, px = -0.01, py = 0.2, pz = 0 }
+	},
 }
 
 local function poseMaoVazia()
@@ -215,7 +296,7 @@ end
 local customPose = {
 	direita = poseMaoVazia(),
 	esquerda = poseMaoVazia(),
-	torso = { x = 0, y = 0, z = 0 },
+	torso = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
 	cabeca = { x = 0, y = 0, z = 0 },
 	pernaDir = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
 	pernaEsq = { x = 0, y = 0, z = 0, px = 0, py = 0, pz = 0 },
@@ -487,10 +568,20 @@ local function alvoDedosEmote(emote, id, ehDireito)
 		local d = defaultEmotes["Braços Cruzados"]
 		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
 		return f[1], f[2]
-	elseif emote == "Maçaneta" or emote == "Deitado de Frente" or emote == "Sentar" or emote == "Ajoelhar" or emote == "Dormir" or emote == "Dormir2" then
+	elseif emote == "Maçaneta" or emote == "Deitado de Frente" or emote == "Sentar" or emote == "Ajoelhar" or emote == "Dormir" or emote == "Dormir2"
+		or emote == "De Quatro" then
 		-- dedos vêm da config (defaultEmotes) pra ficar igual ao DEV
 		local d = defaultEmotes[emote]
 		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
+		return f[1], f[2]
+	elseif emote == "Chupada de Dedo" then
+		-- dedos da config + leve "chupa" no indicador da mão direita
+		local d = defaultEmotes["Chupada de Dedo"]
+		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
+		if ehDireito and id == 2 then
+			local k = 0.5 + 0.5 * sin(tick() * 7)
+			return (f[1] or 18) + 6 * k, (f[2] or 63) + 4 * k
+		end
 		return f[1], f[2]
 	elseif emote == "Dedo" then
 		if not ehDireito then return 10, 10 end
@@ -518,6 +609,24 @@ local function alvoDedosEmote(emote, id, ehDireito)
 			return 60, 60
 		end
 		return 90, 90
+	elseif emote == "Siririca" then
+		local d = defaultEmotes["Siririca"]
+		local f = (ehDireito and d.dedosDir or d.dedosEsq)[id]
+		if not ehDireito then return f[1], f[2] end
+		-- mão direita: movimento de esfregar (vai e vem nos dedos do meio)
+		-- intensifica depois do delay do GOZAR
+		local inten = 0
+		if siriricaTempo > GOZAR.delay then
+			inten = clamp((siriricaTempo - GOZAR.delay) / GOZAR.buildup, 0, 1)
+		end
+		local vel = 9 + GOZAR.rubVelExtra * inten
+		local k = 0.5 + 0.5 * sin(tick() * vel)
+		local ampBase = 12 + 10 * inten
+		local ampPonta = 10 + 8 * inten
+		if id == 2 or id == 3 then
+			return f[1] + ampBase * k, f[2] + ampPonta * k
+		end
+		return f[1], f[2]
 	end
 	return nil
 end
@@ -546,6 +655,23 @@ local function cfPerna(p)
 	return CFrame.new(p.px or 0, p.py or 0, p.pz or 0) * CFrame.Angles(rad(p.x), rad(p.y), rad(p.z))
 end
 
+-- C0 padrão dos joints do R6 (mesmos valores do J_R6 do preview)
+local C0_R6 = {
+	root = CFrame.new(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0),
+	neck = CFrame.new(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0),
+	rs = CFrame.new(1, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0),
+	ls = CFrame.new(-1, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0),
+	rh = CFrame.new(1, -1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0),
+	lh = CFrame.new(-1, -1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0),
+}
+
+-- anula no joint (ombro/pescoço/quadril) a rotação extra D aplicada no torso,
+-- pra peça ligada a ele ficar parada no mundo enquanto só o torso balança
+local function fixaNoMundo(c0, T, D)
+	local R = C0_R6.root
+	return c0:Inverse() * R * D:Inverse() * R:Inverse() * c0 * T
+end
+
 -- pose montada pelo painel DEV
 local function calcularPoseCustom()
 	local P = poseVazia()
@@ -563,7 +689,7 @@ local function calcularPoseCustom()
 	end
 	if animConfig.torso then
 		P.wB = 1
-		P.B = cfRot(customPose.torso)
+		P.B = cfPerna(customPose.torso)
 	end
 	if animConfig.pernas then
 		P.wP = 1
@@ -702,7 +828,7 @@ local function calcularPoseEmote(emote, tempo, usar)
 		P.wB = 1
 		P.wP = 1
 		P.N = cfRot(d.cabeca)
-		P.B = cfRot(d.torso)
+		P.B = cfPerna(d.torso)
 		P.PR = cfPerna(d.pernaDir)
 		P.PL = cfPerna(d.pernaEsq)
 	elseif emote == "Sentar" or emote == "Ajoelhar" or emote == "Dormir" or emote == "Dormir2" then
@@ -722,7 +848,7 @@ local function calcularPoseEmote(emote, tempo, usar)
 		-- só o Sentar "respira"; no Dormir a cabeça fica parada (senão balança pra frente e pra trás)
 		local respiro = (emote == "Sentar") and rad(1.5 * sin(tempo * 1.6)) or 0
 		P.N = cfRot(d.cabeca) * CFrame.Angles(respiro, 0, 0)
-		P.B = cfRot(d.torso)
+		P.B = cfPerna(d.torso)
 		P.PR = cfPerna(d.pernaDir)
 		P.PL = cfPerna(d.pernaEsq)
 	elseif emote == "Bow" then
@@ -741,9 +867,71 @@ local function calcularPoseEmote(emote, tempo, usar)
 		P.wP = 1
 		local bob = sin(tempo * 7.2) * 26
 		P.N = cfRot(d.cabeca) * CFrame.Angles(rad(-bob), rad(8 * sin(tempo * 4)), 0)
-		P.B = cfRot(d.torso) * CFrame.Angles(0, 0, rad(8 * cos(tempo * 2.5)))
+		P.B = cfPerna(d.torso) * CFrame.Angles(0, 0, rad(8 * cos(tempo * 2.5)))
 		P.PR = cfPerna(d.pernaDir)
 		P.PL = cfPerna(d.pernaEsq)
+	elseif emote == "Siririca" then
+		-- lê defaultEmotes["Siririca"] + movimento de esfregar (intensifica depois do delay do GOZAR)
+		local d = defaultEmotes["Siririca"]
+		local inten = 0
+		if siriricaTempo > GOZAR.delay then
+			inten = clamp((siriricaTempo - GOZAR.delay) / GOZAR.buildup, 0, 1)
+		end
+		if dirOn then
+			P.wR = 1
+			local amp = 0.06 + GOZAR.rubExtra * inten
+			local vel = 9 + GOZAR.rubVelExtra * inten
+			local rub = amp * sin(tempo * vel)
+			P.R = CFrame.new(d.dir.px, d.dir.py + rub, d.dir.pz) * CFrame.Angles(rad(d.dir.x), rad(d.dir.y), rad(d.dir.z))
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		-- tremor leve no clímax (cabeça e torso)
+		local tr = GOZAR.tremor * inten
+		local shakeX = tr * sin(tempo * 22)
+		local shakeZ = tr * cos(tempo * 18)
+		P.N = cfRot(d.cabeca) * CFrame.Angles(shakeX * 1.4, 0, shakeZ)
+		P.B = cfPerna(d.torso) * CFrame.Angles(shakeX * 0.6, 0, shakeZ * 0.8)
+		P.PR = cfPerna(d.pernaDir)
+		P.PL = cfPerna(d.pernaEsq)
+	elseif emote == "Chupada de Dedo" then
+		local d = defaultEmotes["Chupada de Dedo"]
+		if dirOn then
+			P.wR = 1
+			P.R = cfBraco(d.dir)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = cfBraco(d.esq)
+		end
+		P.wN = 1
+		-- leve balanço da cabeça como se chupasse o dedo
+		P.N = cfRot(d.cabeca) * CFrame.Angles(rad(3 * sin(tempo * 7)), rad(2 * cos(tempo * 5)), 0)
+	elseif emote == "De Quatro" then
+		local d = defaultEmotes["De Quatro"]
+		-- balanço só do TORSO: ele gira junto com a cabeça; braços/pernas são compensados pra ficarem parados
+		local SWAY_YAW, SWAY_ROLL = 10, 3 -- graus
+		local D = CFrame.Angles(0, rad(SWAY_YAW * sin(tempo * 4.2)), rad(SWAY_ROLL * cos(tempo * 3)))
+		if dirOn then
+			P.wR = 1
+			P.R = fixaNoMundo(C0_R6.rs, cfBraco(d.dir), D)
+		end
+		if esqOn then
+			P.wL = 1
+			P.L = fixaNoMundo(C0_R6.ls, cfBraco(d.esq), D)
+		end
+		P.wN = 1
+		P.wB = 1
+		P.wP = 1
+		P.N = cfRot(d.cabeca) -- sem compensação: a cabeça acompanha o balanço do torso
+		P.B = cfPerna(d.torso) * D
+		P.PR = fixaNoMundo(C0_R6.rh, cfPerna(d.pernaDir), D)
+		P.PL = fixaNoMundo(C0_R6.lh, cfPerna(d.pernaEsq), D)
 	end
 	return P
 end
@@ -824,7 +1012,7 @@ local function carregarEmote(nome)
 	end
 
 	customPose.cabeca = copia3(d.cabeca)
-	customPose.torso = copia3(d.torso)
+	customPose.torso = copiaPerna(d.torso)
 	customPose.pernaDir = copiaPerna(d.pernaDir)
 	customPose.pernaEsq = copiaPerna(d.pernaEsq)
 
@@ -859,7 +1047,7 @@ local function resetarParte(parte)
 			E.dedos[j] = copiaDedo(d.dedosEsq[j])
 		end
 	elseif parte == "torso" then
-		customPose.torso = copia3(d.torso)
+		customPose.torso = copiaPerna(d.torso)
 	elseif parte == "cabeca" then
 		customPose.cabeca = copia3(d.cabeca)
 	elseif parte == "pernas" then
@@ -1327,10 +1515,10 @@ local EMOTES = {
 	{ nome = "Tchau", icone = "👋", cat = "Cumprimentos" },
 	{ nome = "Paz", icone = "✌️", cat = "Cumprimentos" },
 	{ nome = "Sim", icone = "🙂", cat = "Gestos" },
-	{ nome = "Maçaneta", icone = "😏", cat = "Gestos" },
+	{ nome = "Maçaneta", icone = "😏", cat = "+18" },
 	{ nome = "Apontar", icone = "👉", cat = "Gestos", toggle = true },
-	{ nome = "Bow", icone = "🙇", cat = "Reverências" },
-	{ nome = "Dedo", icone = "🖕", cat = "+18" },
+	{ nome = "Bow", icone = "🙇", cat = "+18" },
+	{ nome = "Dedo", icone = "🖕", cat = "Gestos" },
 	{ nome = "Citação", icone = "👌", cat = "+18" },
 	{ nome = "Sentido", icone = "🎖️", cat = "Gestos" },
 	{ nome = "Convidando", icone = "😈", cat = "+18" },
@@ -1342,6 +1530,9 @@ local EMOTES = {
 	{ nome = "Ajoelhar", icone = "🧎", cat = "Gestos", toggle = true },
 	{ nome = "Dormir", icone = "🛌", cat = "Gestos", toggle = true },
 	{ nome = "Dormir2", icone = "🛏️", cat = "Gestos", toggle = true },
+	{ nome = "Siririca", icone = "💦", cat = "+18", toggle = true },
+	{ nome = "Chupada de Dedo", icone = "👅", cat = "+18", toggle = true },
+	{ nome = "De Quatro", icone = "🐕", cat = "+18", toggle = true },
 }
 local EMOTE_POR_NOME = {}
 for _, e in ipairs(EMOTES) do EMOTE_POR_NOME[e.nome] = e end
@@ -1352,6 +1543,18 @@ for _, n in ipairs(favList) do favSet[n] = true end
 
 local ativoRefreshers = {}
 local favRefreshers = {}
+
+-- ---------- SENHA DA CATEGORIA +18 ----------
+-- liberada fica guardada no jogador (atributo): vale até sair do jogo, mesmo morrendo/respawnando
+local SENHA_18 = "0000"
+local lockRefreshers = {}
+local function liberado18()
+	return LocalPlayer:GetAttribute("Emote18Liberado") == true
+end
+local function liberar18()
+	LocalPlayer:SetAttribute("Emote18Liberado", true)
+	for _, f in ipairs(lockRefreshers) do f() end
+end
 
 local function refreshAtivos()
 	for _, f in ipairs(ativoRefreshers) do f() end
@@ -1364,24 +1567,32 @@ local function emoteAtivo(nome)
 end
 
 local function tocarEmote(nome)
+	local def = EMOTE_POR_NOME[nome]
+	if def and def.cat == "+18" and not liberado18() then return end
 	if nome == "Apontar" then
 		apontarCamera = not apontarCamera
 		if apontarCamera then
 			currentEmote = nil
 			emoteTimer = 0
+			siriricaTempo = 0
 		end
 	elseif EMOTES_TOGGLE[nome] then
 		-- toggle: liga e fica até você desligar (boneco imóvel enquanto ativo)
 		if currentEmote == nome and emoteTimer > 0 then
 			currentEmote = nil
 			emoteTimer = 0
+			siriricaTempo = 0
 		else
+			if nome ~= "Siririca" then siriricaTempo = 0 end
 			currentEmote = nome
 			emoteTimer = math.huge
+			if nome == "Siririca" then siriricaTempo = 0 end
 		end
 	else
+		if nome ~= "Siririca" then siriricaTempo = 0 end
 		currentEmote = nome
 		emoteTimer = emoteDuration
+		if nome == "Siririca" then siriricaTempo = 0 end
 	end
 	refreshAtivos()
 end
@@ -1403,7 +1614,7 @@ end
 -- =======================================================================
 local toggleMenu
 do
-local MENU_W, MENU_H = 480, 300
+local MENU_W, MENU_H = 480, 320
 local menuAberto = false
 local catAtual = "Todos"
 local CATEGORIAS = { "Todos", "Favoritos", "Gestos", "Cumprimentos", "Reverências", "+18" }
@@ -1446,7 +1657,7 @@ local semFavLabel = txt({
 
 -- painel de preview
 local previewPane = frame({
-	Position = UDim2.fromOffset(MENU_W - 16 - 150, 54), Size = UDim2.new(0, 150, 1, -54 - 34), Parent = Menu,
+	Position = UDim2.fromOffset(MENU_W - 16 - 150, 88), Size = UDim2.new(0, 150, 1, -88 - 34), Parent = Menu,
 }, { round(14), outline(T.stroke, 1, 0.5) })
 local previewVP = novoViewport({ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 136), BackgroundColor3 = T.bg, Parent = previewPane })
 local menuPreview = criarPreview(previewVP)
@@ -1468,9 +1679,10 @@ end
 local cardRefs = {}
 
 local function passaFiltro(e)
-	if catAtual == "Todos" then return true end
-	if catAtual == "Favoritos" then return favSet[e.nome] == true end
-	return e.cat == catAtual
+	local bloqueado = (e.cat == "+18" and not liberado18())
+	if catAtual == "Todos" then return e.cat ~= "+18" end -- +18 fica só na categoria própria
+	if catAtual == "Favoritos" then return favSet[e.nome] == true and not bloqueado end
+	return e.cat == catAtual and not bloqueado
 end
 
 local function atualizarCards()
@@ -1530,12 +1742,67 @@ local function atualizarChips()
 	end
 end
 
+-- ---------- janela de senha (+18) ----------
+local senhaOverlay = frame({
+	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1),
+	Active = true, Visible = false, ZIndex = 50, Parent = Menu,
+})
+local senhaCard = frame({
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(260, 156),
+	BackgroundColor3 = T.surface, ZIndex = 51, Parent = senhaOverlay,
+}, { round(14), outline(T.stroke, 1, 0.3) })
+txt({ Text = "🔒  Categoria +18", Font = F.GothamBold, TextSize = 14, Position = UDim2.fromOffset(20, 14), Size = UDim2.new(1, -40, 0, 18), ZIndex = 52, Parent = senhaCard })
+txt({ Text = "Digite a senha para liberar", TextSize = 11, TextColor3 = T.dim, Position = UDim2.fromOffset(20, 34), Size = UDim2.new(1, -40, 0, 14), ZIndex = 52, Parent = senhaCard })
+local senhaBox = new("TextBox", {
+	BackgroundColor3 = T.surface3, BorderSizePixel = 0, Font = F.Code, TextSize = 14, TextColor3 = T.text,
+	PlaceholderText = "Senha", PlaceholderColor3 = T.dim, ClearTextOnFocus = false, Text = "",
+	Position = UDim2.fromOffset(20, 58), Size = UDim2.new(1, -40, 0, 30), ZIndex = 52, Parent = senhaCard,
+}, { round(8) })
+local senhaErro = txt({ Text = "", TextSize = 11, TextColor3 = T.danger, Position = UDim2.fromOffset(20, 92), Size = UDim2.new(1, -40, 0, 14), ZIndex = 52, Parent = senhaCard })
+local senhaCancelar = btn({
+	Text = "Cancelar", TextSize = 12, TextColor3 = T.sub, Position = UDim2.fromOffset(20, 114), Size = UDim2.new(0.5, -26, 0, 28), ZIndex = 52, Parent = senhaCard,
+}, { round(8) })
+local senhaEntrar = btn({
+	Text = "Entrar", TextSize = 12, Font = F.GothamBold, BackgroundColor3 = T.accent, TextColor3 = Color3.new(1, 1, 1),
+	Position = UDim2.new(0.5, 6, 0, 114), Size = UDim2.new(0.5, -26, 0, 28), ZIndex = 52, Parent = senhaCard,
+}, { round(8) })
+hoverFX(senhaCancelar, T.surface2, T.surface3)
+hoverFX(senhaEntrar, T.accent, Color3.fromRGB(148, 134, 255))
+
+local function abrirSenha()
+	senhaBox.Text = ""
+	senhaErro.Text = ""
+	senhaOverlay.Visible = true
+	task.defer(function() senhaBox:CaptureFocus() end)
+end
+local function fecharSenha()
+	senhaBox:ReleaseFocus()
+	senhaOverlay.Visible = false
+end
+local function tentarSenha()
+	if senhaBox.Text == SENHA_18 then
+		liberar18()
+		fecharSenha()
+		catAtual = "+18"
+		atualizarChips()
+		construirCards()
+	else
+		senhaErro.Text = "Senha incorreta"
+		senhaBox.Text = ""
+		task.defer(function() senhaBox:CaptureFocus() end)
+	end
+end
+senhaEntrar.MouseButton1Click:Connect(tentarSenha)
+senhaCancelar.MouseButton1Click:Connect(fecharSenha)
+senhaBox.FocusLost:Connect(function(enter) if enter then tentarSenha() end end)
+
 for i, nome in ipairs(CATEGORIAS) do
 	local chip = btn({
 		Text = nome, TextSize = 10, Font = F.GothamMedium, AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0), LayoutOrder = i, Parent = chipsBar,
 	}, { round(12), padding(10, 0, 10, 0) })
 	chip.MouseButton1Click:Connect(function()
+		if nome == "+18" and not liberado18() then abrirSenha() return end
 		catAtual = nome
 		atualizarChips()
 		construirCards()
@@ -1543,6 +1810,13 @@ for i, nome in ipairs(CATEGORIAS) do
 	chipRefs[nome] = chip
 end
 atualizarChips()
+
+-- cadeado no botão +18 enquanto estiver trancado
+local function atualizarLockChip()
+	chipRefs["+18"].Text = liberado18() and "+18" or "🔒 +18"
+end
+atualizarLockChip()
+table.insert(lockRefreshers, atualizarLockChip)
 
 table.insert(ativoRefreshers, atualizarCards)
 table.insert(favRefreshers, function() construirCards() end)
@@ -1561,6 +1835,7 @@ function toggleMenu(abrir)
 		menuPreview.setCustom(false)
 		mostrarPreview(EMOTE_POR_NOME[currentEmote or ""] or EMOTES[1])
 	else
+		senhaOverlay.Visible = false
 		tw(Menu, 0.16, { GroupTransparency = 1, Position = UDim2.new(0.5, 0, 0.5, 10) })
 		menuPreview.setActive(false)
 		task.delay(0.17, function()
@@ -1611,7 +1886,7 @@ for i, e in ipairs(EMOTES) do
 	}, { round(999) })
 	local st = outline(T.stroke, 1.5, 0.3)
 	st.Parent = item
-	txt({ Text = e.icone, TextSize = 21, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), Parent = item })
+	local wIc = txt({ Text = e.icone, TextSize = 21, TextXAlignment = CENTER, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), Parent = item })
 	txt({ Text = e.nome, Font = F.GothamMedium, TextSize = 9, TextXAlignment = CENTER, TextColor3 = T.sub, Position = UDim2.fromOffset(0, 36), Size = UDim2.new(1, 0, 0, 14), Parent = item })
 	item.MouseButton1Click:Connect(function()
 		tocarEmote(e.nome)
@@ -1620,8 +1895,17 @@ for i, e in ipairs(EMOTES) do
 		tw(Wheel, 0.12, { GroupTransparency = 1 })
 		task.delay(0.13, function() if not wheelAberta then Wheel.Visible = false end end)
 	end)
-	wheelItens[i] = { item = item, stroke = st }
+	wheelItens[i] = { item = item, stroke = st, icone = wIc }
 end
+
+local function atualizarLockRoda()
+	for i, w in ipairs(wheelItens) do
+		local e = EMOTES[i]
+		w.icone.Text = (e.cat == "+18" and not liberado18()) and "🔒" or e.icone
+	end
+end
+atualizarLockRoda()
+table.insert(lockRefreshers, atualizarLockRoda)
 
 local function wheelSelecionar(idx)
 	if idx == wheelSel then return end
@@ -1834,7 +2118,7 @@ RunService.RenderStepped:Connect(function(dt)
 	acumStatus = 0
 	pintarColuna(colDir, customPose.direita, animConfig.direita)
 	pintarColuna(colEsq, customPose.esquerda, animConfig.esquerda)
-	statusFoot.Text = parteFoot("TOR", customPose.torso, animConfig.torso) .. "  "
+	statusFoot.Text = parteFootPerna("TOR", customPose.torso, animConfig.torso) .. "  "
 		.. parteFoot("CAB", customPose.cabeca, animConfig.cabeca) .. "\n"
 		.. parteFootPerna("PD", customPose.pernaDir, animConfig.pernas) .. "\n"
 		.. parteFootPerna("PE", customPose.pernaEsq, animConfig.pernas)
@@ -2103,6 +2387,13 @@ local function montarTorso()
 	criarToggle(S1, "Controlar torso", function() return animConfig.torso end, function(v) animConfig.torso = v end, 1)
 	local S2 = criarSecao(Content, "to_rot", "ROTAÇÃO DO TORSO", T.ax[1], 2)
 	slidersRot(S2, function() return customPose.torso end, 0, -90, 90, ROT_LABELS)
+	local S3 = criarSecao(Content, "to_pos", "POSIÇÃO DO TORSO", T.ax[3], 3)
+	for i, k in ipairs({ "px", "py", "pz" }) do
+		criarSlider(S3, {
+			label = ({ "Lado", "Frente / trás", "Cima / baixo" })[i], axis = i, min = -2, max = 2, dec = 2, order = i,
+			value = customPose.torso[k] or 0, onChange = function(v) customPose.torso[k] = v end,
+		})
+	end
 end
 
 local function montarCabeca()
@@ -2208,7 +2499,7 @@ local function gerarLua()
 		currentEmote or "Nenhum",
 		br(D.braco), v3(D.palma), dedos(D), fmt(D.afastamento),
 		br(E.braco), v3(E.palma), dedos(E), fmt(E.afastamento),
-		v3(customPose.cabeca), v3(customPose.torso), br(customPose.pernaDir), br(customPose.pernaEsq)
+		v3(customPose.cabeca), br(customPose.torso), br(customPose.pernaDir), br(customPose.pernaEsq)
 	)
 end
 
@@ -2333,7 +2624,12 @@ end
 closeDevBtn.MouseButton1Click:Connect(fecharDev)
 trocarBtn.MouseButton1Click:Connect(function() DevSelector.Visible = true end)
 
-local emotesDev = { "Tchau", "Paz", "Sim", "Maçaneta", "Bow", "Dedo", "Citação", "Sentido", "Convidando", "Dancinha", "Cala a Boca", "Braços Cruzados", "Deitado de Frente", "Sentar", "Ajoelhar", "Dormir", "Dormir2" }
+local emotesDev = {
+	"Tchau", "Paz", "Sim", "Maçaneta", "Bow", "Dedo", "Citação", "Sentido", "Convidando",
+	"Dancinha", "Cala a Boca", "Braços Cruzados", "Deitado de Frente", "Sentar", "Ajoelhar",
+	"Dormir", "Dormir2", "Siririca",
+	"Chupada de Dedo", "De Quatro",
+}
 for i, nome in ipairs(emotesDev) do
 	local e = EMOTE_POR_NOME[nome]
 	local row = btn({ BackgroundColor3 = T.surface, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = i, ZIndex = 30, Parent = selList }, { round(8) })
@@ -2667,6 +2963,212 @@ local function criarMaoDinamica(character)
 		end
 	end
 
+	-- ---------- GOZAR (Siririca): partículas + poças no chão ----------
+	local gozarFX = nil
+	local gozarRayParams = RaycastParams.new()
+	gozarRayParams.FilterType = Enum.RaycastFilterType.Exclude
+	gozarRayParams.FilterDescendantsInstances = { character, folder }
+
+	local function gozarLigar()
+		if gozarFX and gozarFX.pasta.Parent then return end
+
+		local pasta = Instance.new("Folder")
+		pasta.Name = "GozarFX"
+		pasta.Parent = folder
+
+		local ancora = Instance.new("Part")
+		ancora.Name = "GozarAncora"
+		ancora.Anchored = true
+		ancora.CanCollide = false
+		ancora.CanQuery = false
+		ancora.CanTouch = false
+		ancora.CastShadow = false
+		ancora.Massless = true
+		ancora.Size = Vector3.new(0.25, 0.25, 0.25)
+		ancora.Transparency = 1
+		ancora.Parent = pasta
+
+		local att = Instance.new("Attachment")
+		att.Name = "GozarAtt"
+		-- emite pra baixo (eixo -Y do attachment)
+		att.CFrame = CFrame.Angles(rad(90), 0, 0)
+		att.Parent = ancora
+
+		local tr0 = GOZAR.transparencia
+		local function criarEmitter(nome, sizeSeq, speedRange, spread)
+			local pe = Instance.new("ParticleEmitter")
+			pe.Name = nome
+			pe.Texture = GOZAR.texturaParticula
+			pe.Color = ColorSequence.new(GOZAR.cor)
+			pe.Size = sizeSeq
+			pe.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, tr0),
+				NumberSequenceKeypoint.new(0.45, tr0 + 0.15),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			pe.Lifetime = GOZAR.lifetime
+			pe.Speed = speedRange
+			pe.SpreadAngle = Vector2.new(spread, spread)
+			-- puxa forte pra baixo (pinga, não explode pros lados)
+			pe.Acceleration = Vector3.new(0, -22, 0)
+			pe.Drag = 0.8
+			pe.Rate = 0
+			pe.Rotation = NumberRange.new(0, 360)
+			pe.RotSpeed = NumberRange.new(-60, 60)
+			pe.LightEmission = 0.2
+			pe.LightInfluence = 0.12
+			pe.EmissionDirection = Enum.NormalId.Front
+			pe.Enabled = true
+			pe.Parent = att
+			return pe
+		end
+
+		local pe = criarEmitter(
+			"Gozar",
+			GOZAR.partSize,
+			GOZAR.speed,
+			GOZAR.spread
+		)
+		local pe2 = criarEmitter(
+			"Gozar2",
+			NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.1),
+				NumberSequenceKeypoint.new(0.5, 0.16),
+				NumberSequenceKeypoint.new(1, 0.04),
+			}),
+			NumberRange.new(0.5, 1.6),
+			8
+		)
+
+		local pocasPasta = Instance.new("Folder")
+		pocasPasta.Name = "Pocas"
+		pocasPasta.Parent = pasta
+
+		gozarFX = {
+			pasta = pasta,
+			ancora = ancora,
+			pe = pe,
+			pe2 = pe2,
+			pocas = pocasPasta,
+			pocasAtivas = {},
+			acumPoca = 0,
+		}
+	end
+
+	local function gozarDesligar()
+		if gozarFX then
+			gozarFX.pasta:Destroy()
+			gozarFX = nil
+		end
+	end
+
+	local function spawnPoca(hitPos, hitNormal, inten)
+		local fx = gozarFX
+		if not fx then return end
+
+		-- remove as mais antigas se passou do limite
+		while #fx.pocasAtivas >= GOZAR.pocasMax do
+			local antiga = table.remove(fx.pocasAtivas, 1)
+			if antiga and antiga.Parent then antiga:Destroy() end
+		end
+
+		local tam = GOZAR.pocaTamanhoMin + (GOZAR.pocaTamanhoMax - GOZAR.pocaTamanhoMin) * (0.35 + 0.65 * inten)
+		tam = tam * (0.85 + math.random() * 0.3)
+
+		local poca = Instance.new("Part")
+		poca.Name = "Poca"
+		poca.Anchored = true
+		poca.CanCollide = false
+		poca.CanQuery = false
+		poca.CanTouch = false
+		poca.CastShadow = false
+		poca.Massless = true
+		poca.Material = Enum.Material.SmoothPlastic
+		poca.Color = Color3.fromRGB(255, 252, 248)
+		poca.Transparency = 1
+		poca.Size = Vector3.new(tam, 0.04, tam)
+		-- alinha com o chão (normal) e sobe um tiquinho pra não z-fight
+		local up = hitNormal.Magnitude > 0.01 and hitNormal.Unit or Vector3.yAxis
+		local cf = CFrame.lookAt(hitPos + up * 0.025, hitPos + up * 0.025 + up)
+		-- lookAt aponta -Z; gira pra ficar deitado no chão
+		poca.CFrame = cf * CFrame.Angles(rad(-90), rad(math.random() * 360), 0)
+		poca.Parent = fx.pocas
+
+		local trBase = GOZAR.transparencia
+		local decal = Instance.new("Decal")
+		decal.Name = "Textura"
+		decal.Face = Enum.NormalId.Top
+		decal.Texture = GOZAR.texturaChao
+		decal.Transparency = trBase
+		decal.Parent = poca
+
+		table.insert(fx.pocasAtivas, poca)
+
+		-- some aos poucos e some
+		local dur = GOZAR.pocaDuracao * (0.85 + math.random() * 0.3)
+		task.spawn(function()
+			local t0 = tick()
+			while poca.Parent do
+				local t = tick() - t0
+				if t >= dur then break end
+				local fade = clamp((t - dur * 0.55) / (dur * 0.45), 0, 1)
+				decal.Transparency = trBase + (1 - trBase) * fade
+				-- encolhe um pouco no final
+				local s = 1 - 0.25 * fade
+				poca.Size = Vector3.new(tam * s, 0.04, tam * s)
+				task.wait(0.08)
+			end
+			if poca.Parent then poca:Destroy() end
+			-- tira da lista
+			if fx.pocasAtivas then
+				local i = table.find(fx.pocasAtivas, poca)
+				if i then table.remove(fx.pocasAtivas, i) end
+			end
+		end)
+	end
+
+	local function gozarAtualizar(inten, dt)
+		local fx = gozarFX
+		if not fx then return end
+
+		local torsoPart = character:FindFirstChild("Torso")
+		if not torsoPart then return end
+
+		-- origem na região da cintura / entre as pernas (um pouco pra frente)
+		local origem = torsoPart.CFrame * CFrame.new(0, -0.85, -0.55)
+		fx.ancora.CFrame = origem
+
+		local rate = GOZAR.minRate + (GOZAR.maxRate - GOZAR.minRate) * inten
+		fx.pe.Rate = rate
+		fx.pe2.Rate = rate * 0.55
+
+		-- pinga pra baixo: velocidade baixa, gravidade forte (não explode pros lados)
+		local velExtra = 0.6 * inten
+		fx.pe.Acceleration = Vector3.new(0, -22 - 6 * inten, 0)
+		fx.pe.Speed = NumberRange.new(0.8 + velExtra * 0.3, 2.2 + velExtra)
+		fx.pe2.Speed = NumberRange.new(0.5 + velExtra * 0.2, 1.6 + velExtra * 0.7)
+		fx.pe.SpreadAngle = Vector2.new(GOZAR.spread, GOZAR.spread)
+		fx.pe2.SpreadAngle = Vector2.new(8, 8)
+
+		-- spawna poças bem embaixo (pouco espalhadas, como pingos caindo)
+		fx.acumPoca = (fx.acumPoca or 0) + (dt or 0.03)
+		local intervalo = GOZAR.pocaSpawnInterval / (0.4 + 0.6 * inten)
+		if fx.acumPoca >= intervalo then
+			fx.acumPoca = 0
+			local look = torsoPart.CFrame.LookVector
+			local right = torsoPart.CFrame.RightVector
+			for _ = 1, (inten > 0.6 and 2 or 1) do
+				local ox = (math.random() - 0.5) * 0.55
+				local oz = -0.15 - math.random() * 0.45
+				local origemRay = origem.Position + right * ox + look * oz + Vector3.yAxis * 0.15
+				local hit = workspace:Raycast(origemRay, Vector3.new(0, -8, 0), gozarRayParams)
+				if hit then
+					spawnPoca(hit.Position, hit.Normal, inten)
+				end
+			end
+		end
+	end
+
 	-- trava o boneco parado durante emotes em EMOTES_IMOVEIS (só no cliente)
 	local imovelOrig = nil
 	local corpoAplicado = false
@@ -2694,6 +3196,9 @@ local function criarMaoDinamica(character)
 	loopConnectionRender = RunService.RenderStepped:Connect(function(dt)
 		if not character or not character.Parent or humanoid.Health <= 0 then
 			dormirDesligar()
+			gozarDesligar()
+			siriricaTempo = 0
+			siriricaSoundPlayed = false
 			travarImovel(false)
 			limparMaos(); return
 		end
@@ -2724,6 +3229,43 @@ local function criarMaoDinamica(character)
 			dormirAtualizar(tempo)
 		elseif dormirFX then
 			dormirDesligar()
+		end
+
+		-- ---------- SIRIRICA / GOZAR ----------
+		if currentEmote == "Siririca" and (emoteTimer > 0 or freezeEmote) then
+			siriricaTempo = siriricaTempo + dt
+			local inten = 0
+			if siriricaTempo > GOZAR.delay then
+				inten = clamp((siriricaTempo - GOZAR.delay) / GOZAR.buildup, 0, 1)
+				gozarLigar()
+				gozarAtualizar(inten, dt)
+				-- nível 3 = intensidade máxima (clímax): toca o som uma vez
+				if inten >= 1 and not siriricaSoundPlayed then
+					siriricaSoundPlayed = true
+					local s = Instance.new("Sound")
+					s.Name = "SiriricaNivel3"
+					s.SoundId = GOZAR.soundId
+					s.Volume = GOZAR.soundVolume or 0.5
+					s.RollOffMode = Enum.RollOffMode.InverseTapered
+					s.MaxDistance = 80
+					s.Parent = rootPart
+					s:Play()
+					s.Ended:Connect(function()
+						if s and s.Parent then s:Destroy() end
+					end)
+					task.delay(12, function()
+						if s and s.Parent then s:Destroy() end
+					end)
+				end
+			end
+		else
+			if siriricaTempo > 0 then
+				siriricaTempo = 0
+			end
+			siriricaSoundPlayed = false
+			if gozarFX then
+				gozarDesligar()
+			end
 		end
 
 		local toolEquipada = character:FindFirstChildOfClass("Tool")
