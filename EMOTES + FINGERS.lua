@@ -1213,6 +1213,85 @@ end
 
 local CORPO_R6 = { Head = true, Torso = true, ["Right Arm"] = true, ["Left Arm"] = true, ["Right Leg"] = true, ["Left Leg"] = true }
 
+-- =======================================================================
+-- DEV: emote ANIMADO + configurações do painel
+-- A pose do painel (customPose) é a base; a animação do emote (aceno, balanço, etc.)
+-- entra como um "delta" em cima dela, centrado na média da animação. Assim, o que você
+-- edita no painel muda a pose-base e o movimento do emote continua rodando junto.
+-- =======================================================================
+local PARTES_POSE = { "R", "L", "N", "B", "PR", "PL" }
+local mediaEmoteCache = {}
+
+local function soRot(cf) return cf - cf.Position end
+
+-- média (ao longo do tempo) do deslocamento da animação em relação ao instante t=0
+local function mediaEmote(nome)
+	local m = mediaEmoteCache[nome]
+	if m then return m end
+	m = {}
+	local P0 = calcularPoseEmote(nome, 0, false)
+	local N, STEP = 512, 0.1
+	local acc = {}
+	for _, k in ipairs(PARTES_POSE) do acc[k] = { pos = Vector3.new(), rot = Vector3.new() } end
+	for i = 0, N - 1 do
+		local Pt = calcularPoseEmote(nome, i * STEP, false)
+		for _, k in ipairs(PARTES_POSE) do
+			local a = acc[k]
+			a.pos = a.pos + (Pt[k].Position - P0[k].Position)
+			local ax, ang = (soRot(P0[k]):Inverse() * soRot(Pt[k])):ToAxisAngle()
+			a.rot = a.rot + ax * ang
+		end
+	end
+	for _, k in ipairs(PARTES_POSE) do
+		local a = acc[k]
+		local v = a.rot / N
+		local rotInv = CFrame.new()
+		if v.Magnitude > 1e-6 then rotInv = CFrame.fromAxisAngle(v.Unit, v.Magnitude):Inverse() end
+		m[k] = { pos = a.pos / N, rotInv = rotInv }
+	end
+	mediaEmoteCache[nome] = m
+	return m
+end
+
+local PESO_DA_PARTE = { R = "wR", L = "wL", N = "wN", B = "wB", PR = "wP", PL = "wP" }
+
+local function poseCustomComEmote(emote, t)
+	local C = calcularPoseCustom()
+	if not emote then return C end
+	local E = calcularPoseEmote(emote, t, false)
+	local E0 = calcularPoseEmote(emote, 0, false)
+	local med = mediaEmote(emote)
+	local P = poseVazia()
+
+	-- base (painel) + movimento do emote: rotação gira em volta do eixo local, posição soma no espaço do pai
+	local function anima(k, base)
+		local e, e0, md = E[k], E0[k], med[k]
+		local pos = base.Position + (e.Position - e0.Position - md.pos)
+		local rot = soRot(base) * md.rotInv * soRot(e0):Inverse() * soRot(e)
+		return CFrame.new(pos) * rot
+	end
+
+	local function parte(k, ativo, ehBraco)
+		local wk = PESO_DA_PARTE[k]
+		if ativo then
+			P[wk] = 1
+			if E[wk] > 0 then P[k] = anima(k, C[k]) else P[k] = C[k] end
+		elseif not ehBraco then
+			-- parte desligada no painel: segue o emote original
+			P[wk] = E[wk]
+			P[k] = E[k]
+		end
+	end
+
+	parte("R", animConfig.direita, true)
+	parte("L", animConfig.esquerda, true)
+	parte("N", animConfig.cabeca)
+	parte("B", animConfig.torso)
+	parte("PR", animConfig.pernas)
+	parte("PL", animConfig.pernas)
+	return P
+end
+
 local function criarPreview(viewport)
 	local self = {}
 	local cam = Instance.new("Camera")
@@ -1386,7 +1465,7 @@ local function criarPreview(viewport)
 		local t = tick()
 		local P
 		if custom then
-			P = calcularPoseCustom()
+			P = poseCustomComEmote(currentEmote, t)
 		else
 			P = calcularPoseEmote(emote, t, false)
 		end
@@ -1509,6 +1588,888 @@ local function novoViewport(props)
 end
 
 -- =======================================================================
+-- RAGDOLL (vira o emote "Ragdoll" no menu)
+-- =======================================================================
+local Ragdoll = (function()
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+
+local api = {}
+local KEYBIND = nil -- tecla opcional (ex.: Enum.KeyCode.X). R ja e dropar item no script de maos
+
+local SOUNDS_RAGDOLL = {
+    "83123564520089",
+    "91358197736651",
+    "125172888675723",
+    "70742968288690",
+}
+local SOUND_GETUP = "136774133309136"
+local SOUND_JUMP = "73013473893740"
+local SOUND_VOLUME = 1
+local GETUP_TIME = 0.7
+
+local JUMP_POWER = 70
+local JUMP_PUSH = 30
+
+local IMPACT_MIN_SPEED = 6
+local IMPACT_COOLDOWN = 0.25
+local JUMP_COOLDOWN = 0.6
+local JUMP_NEEDS_GROUND = true
+
+local function playSound(ids, parent)
+    if not parent then return end
+    local id = type(ids) == "table" and ids[math.random(#ids)] or ids
+    local ok = pcall(function()
+        local s = Instance.new("Sound")
+        s.SoundId = "rbxassetid://" .. id
+        s.Volume = SOUND_VOLUME
+        s.RollOffMaxDistance = 120
+        s.Parent = parent
+        s:Play()
+        Debris:AddItem(s, 10)
+    end)
+    return ok
+end
+
+local env = (getgenv and getgenv()) or _G
+if env.__RagdollCleanup then
+    pcall(env.__RagdollCleanup)
+end
+
+local LIMITS = {
+    Neck = {cone = 50, twist = 40},
+    Shoulder = {cone = 110, twist = 60},
+    Hip = {cone = 80, twist = 35},
+    Knee = {cone = 70, twist = 10},
+    Elbow = {cone = 80, twist = 10},
+    Ankle = {cone = 35, twist = 15},
+    Wrist = {cone = 40, twist = 20},
+    Waist = {cone = 35, twist = 20},
+    Default = {cone = 50, twist = 25},
+}
+
+local JOINT_FREEDOM = 1.3
+local USE_HINGES = true
+local MOMENTUM_KEEP = 1
+local SPIN_DAMPING = 0.8
+local LIMB_FRICTION = 0.8
+local LIMB_ELASTICITY = 0.05
+local DENSITY = {Head = 1.0, Torso = 1.0, Limb = 0.6}
+local NEVER_STAND = true
+local STAND_LIMIT = 0.4
+local TIP_TORQUE = 38
+local TIP_MAX_SPIN = 7
+local FLAT_SLOPE = 0.03
+local TIP_GROUND_RANGE = 7
+local SELF_COLLIDE = false
+
+local VFX_ENABLED = true
+local AIR_VFX_MIN_SPEED = 35
+local IMPACT_VFX_MIN_SPEED = 14
+local TRAIL_DELAY = 2
+local TRAIL_FADE = 1.5
+local AUTO_RAGDOLL = true
+local AUTO_RAGDOLL_DELAY = TRAIL_DELAY
+local SHAKE_POWER = 1
+local AIR_SHAKE = 0.25
+local FOV_BOOST = 12
+local STABLE_CAMERA = true
+
+local function getLimits(name)
+    local base = LIMITS.Default
+    for key, v in pairs(LIMITS) do
+        if key ~= "Default" and name:find(key) then
+            base = v
+            break
+        end
+    end
+    return {
+        cone = math.min(base.cone * JOINT_FREEDOM, 175),
+        twist = math.min(base.twist * JOINT_FREEDOM, 175),
+    }
+end
+
+local function getDensity(partName)
+    if partName == "Head" then return DENSITY.Head end
+    if partName:find("Torso") then return DENSITY.Torso end
+    return DENSITY.Limb
+end
+
+local ragdolled = false
+local gettingUp = false
+local lastImpact = 0
+local lastGroundTouch = 0
+local ragConns = {}
+local created = {}
+local motors = {}
+local collideBackup = {}
+local physBackup = {}
+local connections = {}
+
+local ui = {}
+local setRagdoll
+local camSubjectBackup = nil
+
+local function getChar()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    return char, hum, root
+end
+
+local vfx = {
+    air = 0,
+    shake = 0,
+    airTime = 0,
+    trail = 0,
+    rayParams = nil,
+    trails = {},
+    trailChar = nil,
+    fovActive = false,
+    baseFov = 70,
+    folder = nil,
+}
+
+local function fxFolder()
+    if not vfx.folder or not vfx.folder.Parent then
+        local f = Instance.new("Folder")
+        f.Name = "RagdollFX"
+        f.Parent = workspace
+        vfx.folder = f
+    end
+    return vfx.folder
+end
+
+local TRAIL_PARTS = {
+    "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot",
+    "Left Arm", "Right Arm", "Left Leg", "Right Leg",
+}
+
+local function clearTrails()
+    for _, inst in ipairs(vfx.trails) do
+        if inst and inst.Parent then inst:Destroy() end
+    end
+    table.clear(vfx.trails)
+    vfx.trailChar = nil
+end
+
+local function ensureTrails(char)
+    if vfx.trailChar == char then return end
+    clearTrails()
+    vfx.trailChar = char
+    for _, name in ipairs(TRAIL_PARTS) do
+        local p = char:FindFirstChild(name)
+        if p and p:IsA("BasePart") then
+            local a0 = Instance.new("Attachment")
+            a0.Name = "FXTrailA0"
+            a0.Position = Vector3.new(0, p.Size.Y * 0.35, 0)
+            a0.Parent = p
+
+            local a1 = Instance.new("Attachment")
+            a1.Name = "FXTrailA1"
+            a1.Position = Vector3.new(0, -p.Size.Y * 0.35, 0)
+            a1.Parent = p
+
+            local t = Instance.new("Trail")
+            t.Name = "FXTrail"
+            t.Attachment0 = a0
+            t.Attachment1 = a1
+            t.Lifetime = 0.3
+            t.MinLength = 0.05
+            t.FaceCamera = true
+            t.LightEmission = 0.5
+            t.Color = ColorSequence.new(Color3.fromRGB(235, 245, 255))
+            t.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.35),
+                NumberSequenceKeypoint.new(1, 1),
+            })
+            t.WidthScale = NumberSequence.new(1, 0.2)
+            t.Enabled = false
+            t.Parent = p
+
+            table.insert(vfx.trails, a0)
+            table.insert(vfx.trails, a1)
+            table.insert(vfx.trails, t)
+        end
+    end
+end
+
+local function spawnDust(pos, normal, speed, color)
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.Transparency = 1
+    part.Size = Vector3.new(1, 1, 1)
+    part.CFrame = CFrame.new(pos, pos + normal) * CFrame.Angles(-math.pi / 2, 0, 0)
+    part.Parent = fxFolder()
+
+    local s = math.clamp(speed / 30, 0.6, 2)
+    local e = Instance.new("ParticleEmitter")
+    e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+    e.Color = ColorSequence.new(color:Lerp(Color3.fromRGB(190, 190, 190), 0.5))
+    e.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.8 * s),
+        NumberSequenceKeypoint.new(1, 2.8 * s),
+    })
+    e.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.35),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    e.Lifetime = NumberRange.new(0.5, 1.1)
+    e.Speed = NumberRange.new(5 * s, 12 * s)
+    e.SpreadAngle = Vector2.new(75, 75)
+    e.Drag = 3
+    e.Rotation = NumberRange.new(0, 360)
+    e.RotSpeed = NumberRange.new(-90, 90)
+    e.EmissionDirection = Enum.NormalId.Top
+    e.Rate = 0
+    e.Parent = part
+    e:Emit(math.clamp(math.floor(speed * 0.6), 6, 30))
+
+    Debris:AddItem(part, 2)
+end
+
+local function vfxImpactAt(pos, normal, speed, color)
+    spawnDust(pos, normal, speed, color)
+    if speed >= 20 then
+        vfx.shake = math.max(vfx.shake, math.clamp(speed / 70, 0.15, 1) * SHAKE_POWER)
+    end
+end
+
+local function vfxImpact(part, other, speed, char)
+    if not VFX_ENABLED or speed < IMPACT_VFX_MIN_SPEED then return end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {char, fxFolder()}
+    local res = workspace:Raycast(part.Position + Vector3.new(0, 1, 0), Vector3.new(0, -6, 0), params)
+    local pos = res and res.Position or part.Position
+    local normal = res and res.Normal or Vector3.yAxis
+    vfxImpactAt(pos, normal, speed, other.Color)
+end
+
+local function vfxStep(dt)
+    local cam = workspace.CurrentCamera
+    local char, hum, root = getChar()
+
+    if char and hum and root and hum.Health > 0 then
+        if not vfx.rayParams then
+            vfx.rayParams = RaycastParams.new()
+            vfx.rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        end
+        vfx.rayParams.FilterDescendantsInstances = {char, fxFolder()}
+        local airborne = workspace:Raycast(root.Position, Vector3.new(0, -6, 0), vfx.rayParams) == nil
+        if airborne and not ragdolled then
+
+            airborne = hum:GetState() == Enum.HumanoidStateType.Freefall
+        end
+        if airborne and not gettingUp then
+            vfx.airTime = vfx.airTime + dt
+        else
+            vfx.airTime = 0
+        end
+
+        if AUTO_RAGDOLL and not ragdolled and not gettingUp
+            and not (api.blocked and api.blocked())
+            and vfx.airTime >= AUTO_RAGDOLL_DELAY then
+            setRagdoll(true)
+        end
+    else
+        vfx.airTime = 0
+    end
+
+    local active = char and root and VFX_ENABLED and ragdolled
+    local target = 0
+    local trailTarget = 0
+    if active then
+        ensureTrails(char)
+        local speed = root.AssemblyLinearVelocity.Magnitude
+        target = math.clamp((speed - AIR_VFX_MIN_SPEED) / 50, 0, 1)
+        trailTarget = math.clamp((vfx.airTime - TRAIL_DELAY) / TRAIL_FADE, 0, 1)
+    elseif vfx.trailChar then
+        clearTrails()
+    end
+
+    vfx.air = vfx.air + (target - vfx.air) * math.min(1, dt * 8)
+    vfx.trail = vfx.trail + (trailTarget - vfx.trail) * math.min(1, dt * 8)
+
+    local t = vfx.trail
+    local on = t > 0.03
+    local seq = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1 - 0.65 * t),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    for _, inst in ipairs(vfx.trails) do
+        if inst:IsA("Trail") then
+            inst.Enabled = on
+            inst.Lifetime = 0.12 + 0.3 * t
+            inst.Transparency = seq
+        end
+    end
+
+    if cam then
+        if vfx.air > 0.02 then
+            if not vfx.fovActive then
+                vfx.baseFov = cam.FieldOfView
+                vfx.fovActive = true
+            end
+            cam.FieldOfView = vfx.baseFov + FOV_BOOST * vfx.air
+        elseif vfx.fovActive then
+            cam.FieldOfView = vfx.baseFov
+            vfx.fovActive = false
+        end
+
+        local s = math.max(vfx.shake, vfx.air * AIR_SHAKE)
+        if s > 0.01 then
+
+            cam.CFrame = cam.CFrame
+                * CFrame.new((math.random() - 0.5) * s * 0.6, (math.random() - 0.5) * s * 0.6, 0)
+        end
+        vfx.shake = vfx.shake * math.max(0, 1 - 7 * dt)
+    end
+end
+
+local function vfxCleanup()
+    pcall(function() RunService:UnbindFromRenderStep("RagdollFX") end)
+    clearTrails()
+    local cam = workspace.CurrentCamera
+    if cam and vfx.fovActive then cam.FieldOfView = vfx.baseFov end
+    if vfx.folder then vfx.folder:Destroy() end
+end
+
+local function enableRagdoll()
+    local char, hum, root = getChar()
+    if not (char and hum and root) or hum.Health <= 0 then return false end
+
+    local jointParts, extras = {}, {}
+    for _, d in ipairs(char:GetDescendants()) do
+        local p0, p1, jc0, jc1, own0, own1
+        if d:IsA("AnimationConstraint") then
+            own0, own1 = d.Attachment0, d.Attachment1
+            if own0 and own1 then p0, p1 = own0.Parent, own1.Parent end
+        elseif d:IsA("Motor6D") or d:IsA("Weld") then
+            p0, p1, jc0, jc1 = d.Part0, d.Part1, d.C0, d.C1
+        elseif d:IsA("WeldConstraint") then
+            p0, p1 = d.Part0, d.Part1
+            if p0 and p1 then
+                jc0 = p0.CFrame:Inverse() * p1.CFrame
+                jc1 = CFrame.new()
+            end
+        end
+
+        if p0 and p1 and p0:IsA("BasePart") and p1:IsA("BasePart")
+            and p0.Name ~= "HumanoidRootPart" and p1.Name ~= "HumanoidRootPart"
+            and p0.Parent == char and p1.Parent == char then
+
+            local lim = getLimits(d.Name)
+
+            local a0, a1 = own0, own1
+            if not a0 then
+                a0 = Instance.new("Attachment")
+                a0.Name = "RagA0"
+                a0.CFrame = jc0
+                a0.Parent = p0
+
+                a1 = Instance.new("Attachment")
+                a1.Name = "RagA1"
+                a1.CFrame = jc1
+                a1.Parent = p1
+
+                table.insert(created, a0)
+                table.insert(created, a1)
+            end
+
+            local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+            local isKnee = d.Name:find("Knee") ~= nil
+            local isElbow = d.Name:find("Elbow") ~= nil
+
+            local joint
+            if USE_HINGES and isR15 and (isKnee or isElbow) then
+                local hinge = Instance.new("HingeConstraint")
+                hinge.Name = "RagConstraint"
+                hinge.Attachment0 = a0
+                hinge.Attachment1 = a1
+                hinge.LimitsEnabled = true
+                if isKnee then
+                    hinge.LowerAngle = -140
+                    hinge.UpperAngle = 5
+                else
+                    hinge.LowerAngle = -5
+                    hinge.UpperAngle = 140
+                end
+                hinge.Restitution = 0
+                joint = hinge
+            else
+                local bs = Instance.new("BallSocketConstraint")
+                bs.Name = "RagConstraint"
+                bs.Attachment0 = a0
+                bs.Attachment1 = a1
+                bs.LimitsEnabled = true
+                bs.UpperAngle = lim.cone
+                bs.TwistLimitsEnabled = true
+                bs.TwistLowerAngle = -lim.twist
+                bs.TwistUpperAngle = lim.twist
+                bs.Restitution = 0
+                joint = bs
+            end
+            joint.Parent = p0
+
+            local nc = Instance.new("NoCollisionConstraint")
+            nc.Name = "RagNoCollide"
+            nc.Part0 = p0
+            nc.Part1 = p1
+            nc.Parent = p0
+
+            table.insert(created, joint)
+            table.insert(created, nc)
+            jointParts[p0] = true
+            jointParts[p1] = true
+
+            d.Enabled = false
+            table.insert(motors, d)
+        end
+    end
+
+    -- desliga os BallSockets que o proprio jogo criou (voltam ao levantar)
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BallSocketConstraint") and d.Name ~= "RagConstraint" and d.Enabled then
+            d.Enabled = false
+            table.insert(motors, d)
+        end
+    end
+
+    if not SELF_COLLIDE then
+        local list = {}
+        for part in pairs(jointParts) do list[#list + 1] = part end
+        for i = 1, #list do
+            for j = i + 1, #list do
+                local pair = Instance.new("NoCollisionConstraint")
+                pair.Name = "RagNoCollide"
+                pair.Part0, pair.Part1 = list[i], list[j]
+                pair.Parent = list[i]
+                table.insert(created, pair)
+            end
+        end
+    end
+
+    local startVel = root.AssemblyLinearVelocity
+
+    table.insert(ragConns, RunService.Heartbeat:Connect(function()
+        if not ragdolled or gettingUp then return end
+        for _, m in ipairs(motors) do
+            if m.Parent and m.Enabled then m.Enabled = false end
+        end
+        if root.CanCollide then root.CanCollide = false end
+        for _, x in ipairs(extras) do
+            if x.Parent and x.CanCollide then x.CanCollide = false end
+        end
+        if not hum.PlatformStand then hum.PlatformStand = true end
+    end))
+
+    local onlyJointParts = next(jointParts) ~= nil
+    for _, p in ipairs(char:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+            collideBackup[p] = p.CanCollide
+            if onlyJointParts and not jointParts[p] then
+                p.CanCollide = false
+                table.insert(extras, p)
+            else
+                p.CanCollide = true
+                physBackup[p] = {p.CustomPhysicalProperties}
+                p.CustomPhysicalProperties = PhysicalProperties.new(
+                    getDensity(p.Name), LIMB_FRICTION, LIMB_ELASTICITY, 50, 50
+                )
+            end
+        end
+    end
+    root.CanCollide = false
+
+    hum.AutoRotate = false
+    hum.PlatformStand = true
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+
+    if STABLE_CAMERA then
+        local cam = workspace.CurrentCamera
+        local subject = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+        if cam and subject then
+            camSubjectBackup = cam.CameraSubject
+            cam.CameraSubject = subject
+        end
+    end
+
+    for _, p in ipairs(char:GetChildren()) do
+        if p:IsA("BasePart") then
+            p.AssemblyLinearVelocity = startVel * MOMENTUM_KEEP
+        end
+    end
+
+    if SPIN_DAMPING > 0 then
+        table.insert(ragConns, RunService.Heartbeat:Connect(function(dt)
+            if not ragdolled or gettingUp then return end
+            local f = math.max(0, 1 - SPIN_DAMPING * dt)
+            for _, p in ipairs(char:GetChildren()) do
+                if p:IsA("BasePart") then
+                    p.AssemblyAngularVelocity = p.AssemblyAngularVelocity * f
+                end
+            end
+        end))
+    end
+
+    if NEVER_STAND then
+        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {char, fxFolder()}
+
+        local function newRandomDir()
+            local a = math.random() * math.pi * 2
+            return Vector3.new(math.cos(a), 0, math.sin(a))
+        end
+        local randomDir = newRandomDir()
+
+        if torso then
+            table.insert(ragConns, RunService.Heartbeat:Connect(function(dt)
+                if not ragdolled or gettingUp or not torso.Parent then return end
+
+                local up = torso.CFrame.UpVector
+                if up.Y <= STAND_LIMIT then
+                    randomDir = newRandomDir()
+                    return
+                end
+                if torso.AssemblyLinearVelocity.Y > 30 then return end
+
+                local hit = workspace:Raycast(torso.Position, Vector3.new(0, -TIP_GROUND_RANGE, 0), params)
+                if not hit then return end
+
+                local slope = Vector3.new(hit.Normal.X, 0, hit.Normal.Z)
+                local lean = Vector3.new(up.X, 0, up.Z)
+                local dir
+                if slope.Magnitude > FLAT_SLOPE then
+                    dir = slope.Unit
+                elseif lean.Magnitude > 0.12 then
+                    dir = lean.Unit
+                else
+                    dir = randomDir
+                end
+
+                local axis = Vector3.yAxis:Cross(dir)
+                if axis.Magnitude < 1e-3 then return end
+                axis = axis.Unit
+
+                local ang = torso.AssemblyAngularVelocity
+                if ang:Dot(axis) < TIP_MAX_SPIN then
+                    local strength = 0.3 + 0.7 * up.Y
+                    torso.AssemblyAngularVelocity = ang + axis * TIP_TORQUE * strength * dt
+                end
+            end))
+        end
+    end
+
+    table.insert(ragConns, hum.StateChanged:Connect(function(_, new)
+        if ragdolled and new ~= Enum.HumanoidStateType.Physics
+            and new ~= Enum.HumanoidStateType.Dead then
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+        end
+    end))
+
+    for _, p in ipairs(char:GetChildren()) do
+        if p:IsA("BasePart") then
+            table.insert(ragConns, p.Touched:Connect(function(other)
+                if not ragdolled or gettingUp then return end
+                if not other.CanCollide or other:IsDescendantOf(char) then return end
+                lastGroundTouch = os.clock()
+                local speed = (p.AssemblyLinearVelocity - other.AssemblyLinearVelocity).Magnitude
+                if speed < IMPACT_MIN_SPEED then return end
+                if os.clock() - lastImpact < IMPACT_COOLDOWN then return end
+                lastImpact = os.clock()
+                playSound(SOUNDS_RAGDOLL, p)
+                vfxImpact(p, other, speed, char)
+            end))
+        end
+    end
+
+    return true
+end
+
+local function disableRagdoll(instant)
+    local char, hum, root = getChar()
+
+    if camSubjectBackup then
+        local cam = workspace.CurrentCamera
+        if cam and hum and hum.Parent then cam.CameraSubject = hum end
+        camSubjectBackup = nil
+    end
+
+    for _, c in ipairs(ragConns) do c:Disconnect() end
+    table.clear(ragConns)
+
+    for _, inst in ipairs(created) do
+        if inst and inst.Parent then inst:Destroy() end
+    end
+    table.clear(created)
+
+    local motorList = motors
+    motors = {}
+
+    local function finish()
+        for p, v in pairs(collideBackup) do
+            if p and p.Parent then p.CanCollide = v end
+        end
+        table.clear(collideBackup)
+        for p, v in pairs(physBackup) do
+            if p and p.Parent then p.CustomPhysicalProperties = v[1] end
+        end
+        table.clear(physBackup)
+        if root and root.Parent then root.CanCollide = true end
+        if hum and hum.Parent then
+            hum.PlatformStand = false
+            hum.AutoRotate = true
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+        gettingUp = false
+    end
+
+    if instant or not (char and hum and root) then
+        for _, m in ipairs(motorList) do
+            if m and m.Parent then m.Enabled = true end
+        end
+        if root then
+            local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CFrame = CFrame.new(root.Position + Vector3.new(0, 3, 0)) * CFrame.Angles(0, yaw, 0)
+        end
+        finish()
+        return
+    end
+
+    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or root
+    local faceUp = torso.CFrame.LookVector.Y > 0
+    local head = Vector3.new(torso.CFrame.UpVector.X, 0, torso.CFrame.UpVector.Z)
+    local yawCF
+    if head.Magnitude > 0.2 then
+        yawCF = CFrame.lookAt(Vector3.zero, faceUp and -head.Unit or head.Unit)
+    else
+        local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+        yawCF = CFrame.Angles(0, yaw, 0)
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {char}
+    local origin = root.Position
+    local hit = workspace:Raycast(origin, Vector3.new(0, -25, 0), params)
+    local groundY = hit and hit.Position.Y or (origin.Y - 2.5)
+    local r6Extra = (hum.RigType == Enum.HumanoidRigType.R6) and 2 or 0
+    local standY = groundY + hum.HipHeight + root.Size.Y / 2 + r6Extra + 0.2
+
+    local sc = 1
+    pcall(function() sc = char:GetScale() end)
+    local pitch = math.rad(faceUp and 90 or -90)
+    local startCF = CFrame.new(origin.X, groundY + 1.1 * sc, origin.Z) * yawCF * CFrame.Angles(pitch, 0, 0)
+    local endCF = CFrame.new(origin.X, standY, origin.Z) * yawCF
+
+    local origC0, rnd = {}, {}
+    for _, m in ipairs(motorList) do
+        if m and m.Parent then
+            if m:IsA("Motor6D") or m:IsA("Weld") then origC0[m] = m.C0 end
+            rnd[m] = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 2
+            m.Enabled = true
+        end
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = startCF
+
+    playSound(SOUND_GETUP, root)
+
+    task.spawn(function()
+        local t0 = os.clock()
+        while true do
+            if not (root and root.Parent and hum and hum.Parent) then break end
+            local a = math.clamp((os.clock() - t0) / GETUP_TIME, 0, 1)
+            local e = 1 - (1 - a) ^ 3
+            local k = math.rad(45) * (1 - e)
+
+            root.CFrame = startCF:Lerp(endCF, e)
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+
+            for m, c0 in pairs(origC0) do
+                if m.Parent then
+                    local r = rnd[m]
+                    m.C0 = c0 * CFrame.Angles(r.X * k, r.Y * k * 0.5, r.Z * k * 0.5)
+                end
+            end
+
+            if a >= 1 then break end
+            RunService.Heartbeat:Wait()
+        end
+
+        for m, c0 in pairs(origC0) do
+            if m.Parent then m.C0 = c0 end
+        end
+        if root and root.Parent then root.CFrame = endCF end
+        finish()
+    end)
+end
+
+local lastJump = 0
+
+local function ragdollJump()
+    if not ragdolled or gettingUp then return end
+    if os.clock() - lastJump < JUMP_COOLDOWN then return end
+
+    local char, hum, root = getChar()
+    if not (char and hum and root) then return end
+
+    if JUMP_NEEDS_GROUND and os.clock() - lastGroundTouch > 0.3 then
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {char, fxFolder()}
+        local sc = 1
+        pcall(function() sc = char:GetScale() end)
+        local len = 4.5 * sc
+        local grounded = false
+        for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso",
+            "Head", "LeftFoot", "RightFoot", "Left Leg", "Right Leg"}) do
+            local part = char:FindFirstChild(name)
+            if part and workspace:Raycast(part.Position, Vector3.new(0, -len, 0), params) then
+                grounded = true
+                break
+            end
+        end
+        if not grounded then return end
+    end
+
+    lastJump = os.clock()
+    playSound(SOUND_JUMP, root)
+
+    local v = root.AssemblyLinearVelocity
+    local dir = hum.MoveDirection
+    local launch = Vector3.new(
+        v.X + dir.X * JUMP_PUSH,
+        JUMP_POWER,
+        v.Z + dir.Z * JUMP_PUSH
+    )
+
+    for _, p in ipairs(char:GetChildren()) do
+        if p:IsA("BasePart") then
+            p.AssemblyLinearVelocity = launch
+        end
+    end
+
+    root.AssemblyAngularVelocity = Vector3.new(
+        math.random(-4, 4), math.random(-2, 2), math.random(-4, 4)
+    )
+end
+
+local function refreshUI()
+    if api.onChange then api.onChange() end
+end
+
+function setRagdoll(state)
+    if state == ragdolled or gettingUp then return end
+    if state then
+        ragdolled = enableRagdoll()
+        if ragdolled then
+            local ponte = _G.__DedosRagdoll
+            if ponte and ponte.ligar then pcall(ponte.ligar) end
+        end
+    else
+        ragdolled = false
+        gettingUp = true
+        local ponte = _G.__DedosRagdoll
+        if ponte and ponte.desligar then pcall(ponte.desligar) end
+        disableRagdoll()
+    end
+    refreshUI()
+end
+
+
+RunService:BindToRenderStep("RagdollFX", Enum.RenderPriority.Camera.Value + 1, vfxStep)
+
+local function userToggle()
+    if api.request then api.request() else setRagdoll(not ragdolled) end
+end
+
+local persistent = {}
+
+table.insert(persistent, UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if KEYBIND and input.KeyCode == KEYBIND then
+        userToggle()
+    end
+end))
+
+table.insert(persistent, UIS.JumpRequest:Connect(ragdollJump))
+
+table.insert(persistent, UIS.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Space and not UIS:GetFocusedTextBox() then
+        ragdollJump()
+    end
+end))
+
+local function hookJump(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    if not hum then return end
+    table.insert(persistent, hum:GetPropertyChangedSignal("Jump"):Connect(function()
+        if hum.Jump and ragdolled then
+            ragdollJump()
+            hum.Jump = false
+        end
+    end))
+end
+task.spawn(function()
+    if player.Character then hookJump(player.Character) end
+end)
+table.insert(persistent, player.CharacterAdded:Connect(hookJump))
+
+table.insert(persistent, player.CharacterAdded:Connect(function(char)
+    ragdolled = false
+    gettingUp = false
+    camSubjectBackup = nil
+    for _, c in ipairs(ragConns) do c:Disconnect() end
+    table.clear(ragConns)
+    table.clear(created); table.clear(motors); table.clear(collideBackup); table.clear(physBackup)
+    refreshUI()
+    local hum = char:WaitForChild("Humanoid", 10)
+    if hum then
+        hum.Died:Connect(function()
+            ragdolled = false
+            refreshUI()
+        end)
+    end
+end))
+
+env.__RagdollCleanup = function()
+    do
+        local ponte = _G.__DedosRagdoll
+        if ponte and ponte.desligar then pcall(ponte.desligar) end
+    end
+    if ragdolled then pcall(disableRagdoll, true) end
+    pcall(vfxCleanup)
+    for _, c in ipairs(ragConns) do c:Disconnect() end
+    for _, c in ipairs(persistent) do c:Disconnect() end
+    for _, c in ipairs(connections) do c:Disconnect() end
+    if ui.gui then ui.gui:Destroy() end
+end
+
+api.set = setRagdoll
+api.toggle = function() setRagdoll(not ragdolled) end
+api.isOn = function() return ragdolled end
+api.busy = function() return gettingUp end
+return api
+end)()
+
+-- =======================================================================
 -- REGISTRO DE EMOTES / FAVORITOS / AÇÕES
 -- =======================================================================
 local EMOTES = {
@@ -1530,6 +2491,7 @@ local EMOTES = {
 	{ nome = "Ajoelhar", icone = "🧎", cat = "Gestos", toggle = true },
 	{ nome = "Dormir", icone = "🛌", cat = "Gestos", toggle = true },
 	{ nome = "Dormir2", icone = "🛏️", cat = "Gestos", toggle = true },
+	{ nome = "Ragdoll", icone = "🤸", cat = "Gestos", toggle = true },
 	{ nome = "Siririca", icone = "💦", cat = "+18", toggle = true },
 	{ nome = "Chupada de Dedo", icone = "👅", cat = "+18", toggle = true },
 	{ nome = "De Quatro", icone = "🐕", cat = "+18", toggle = true },
@@ -1562,6 +2524,7 @@ end
 
 local function emoteAtivo(nome)
 	if nome == "Apontar" then return apontarCamera end
+	if nome == "Ragdoll" then return Ragdoll.isOn() end
 	if EMOTES_TOGGLE[nome] then return currentEmote == nome and emoteTimer > 0 end
 	return currentEmote == nome and (emoteTimer > 0 or freezeEmote)
 end
@@ -1569,6 +2532,26 @@ end
 local function tocarEmote(nome)
 	local def = EMOTE_POR_NOME[nome]
 	if def and def.cat == "+18" and not liberado18() then return end
+	if nome == "Ragdoll" then
+		local querLigar = not Ragdoll.isOn()
+		local emoteAntes = currentEmote
+		currentEmote = nil
+		emoteTimer = 0
+		siriricaTempo = 0
+		task.spawn(function()
+			if querLigar and emoteAntes ~= nil then
+				-- deixa o loop das mãos destravar o corpo (HipHeight/PlatformStand) antes de soltar o ragdoll
+				RunService.RenderStepped:Wait()
+				RunService.RenderStepped:Wait()
+			end
+			Ragdoll.set(querLigar)
+		end)
+		refreshAtivos()
+		return
+	end
+	if Ragdoll.isOn() and (EMOTES_CORPO[nome] or EMOTES_IMOVEIS[nome]) then
+		return -- ragdoll ligado: emotes que mexem no corpo ficam bloqueados
+	end
 	if nome == "Apontar" then
 		apontarCamera = not apontarCamera
 		if apontarCamera then
@@ -1596,6 +2579,10 @@ local function tocarEmote(nome)
 	end
 	refreshAtivos()
 end
+
+Ragdoll.onChange = refreshAtivos
+Ragdoll.blocked = function() return currentEmote ~= nil and EMOTES_CORPO[currentEmote] == true end
+Ragdoll.request = function() tocarEmote("Ragdoll") end
 
 local function toggleFav(nome)
 	if favSet[nome] then
@@ -2727,6 +3714,10 @@ local function tweenValue(current, target, factor)
 end
 
 local function criarMaoDinamica(character)
+	do
+		local ponte = _G.__DedosRagdoll
+		if ponte and ponte.desligar then pcall(ponte.desligar) end
+	end
 	limparMaos()
 
 	local rightArm = character:WaitForChild("Right Arm", 2)
@@ -2819,6 +3810,203 @@ local function criarMaoDinamica(character)
 
 	montarMaoBruta(rightArm, true)
 	montarMaoBruta(leftArm, false)
+
+	-- =======================================================================
+	-- RAGDOLL DOS DEDOS (liga/desliga junto com o emote "Ragdoll")
+	-- Cada dedo vira 2 dobradiças: palma -> base e base -> ponta. Os Welds ficam
+	-- desligados enquanto o ragdoll está ativo e voltam quando você levanta.
+	-- =======================================================================
+	local DEDOS_RAGDOLL = {
+		ativo = true,
+		colidirPonta = true,      -- pontas dos dedos batem no chão/paredes (false = mais leve)
+		densidade = 3,            -- maior = dedo mais "pesado" e estável
+		amortecimento = 6,        -- maior = dedo balança menos
+		limBase = { -25, 100 },   -- ângulo mín/máx da base (graus, mesma escala dos emotes)
+		limPonta = { -10, 115 },  -- ângulo mín/máx da ponta
+	}
+
+	local dedosRagdollAtivo = false
+	local ragdollDedosConn = nil
+	local ragdollDedosCriados = {}
+
+	local function limitesDobradica(cur, amin, amax, dir)
+		local a, b = amin * dir, amax * dir
+		-- sempre inclui o ângulo atual, senão a dobradiça "estala" na hora de ligar
+		local lo = math.min(a, b, cur)
+		local hi = math.max(a, b, cur)
+		return clamp(lo, -180, 180), clamp(hi, -180, 180)
+	end
+
+	local function ragdollDedosDesligar()
+		if not dedosRagdollAtivo then return end
+		dedosRagdollAtivo = false
+		if ragdollDedosConn then ragdollDedosConn:Disconnect(); ragdollDedosConn = nil end
+
+		for _, inst in ipairs(ragdollDedosCriados) do
+			if inst and inst.Parent then inst:Destroy() end
+		end
+		table.clear(ragdollDedosCriados)
+
+		for _, art in ipairs(partesMao) do
+			if art.baseWeld and art.baseWeld.Parent then art.baseWeld.Enabled = true end
+			if art.pontaWeld and art.pontaWeld.Parent then art.pontaWeld.Enabled = true end
+			if art.juntaWeld then
+				for _, w in ipairs(art.juntaWeld) do
+					if w.Parent and art.palma and art.palma.Parent then w.Part0 = art.palma end
+				end
+			end
+			for _, p in ipairs({ art.pBase, art.pPonta }) do
+				if p and p.Parent then
+					p.CanCollide = false
+					p.Massless = true
+					p.CustomPhysicalProperties = nil
+				end
+			end
+			if art.pPonta and art.pPonta.Parent then art.pPonta.Size = art.origTamanhoPonta end
+		end
+	end
+
+	local function ragdollDedosLigar()
+		if dedosRagdollAtivo or not DEDOS_RAGDOLL.ativo then return end
+		dedosRagdollAtivo = true
+
+		-- o eixo X do Attachment (eixo da dobradiça) vira o eixo Z da peça (eixo de dobra do dedo)
+		local HO = CFrame.fromMatrix(Vector3.zero, Vector3.zAxis, Vector3.yAxis)
+
+		local function novoAttachment(parte, cf)
+			local a = Instance.new("Attachment")
+			a.Name = "RagDedoAtt"
+			a.CFrame = cf
+			a.Parent = parte
+			table.insert(ragdollDedosCriados, a)
+			return a
+		end
+
+		local function novaDobradica(a0, a1, lo, hi, pai)
+			local h = Instance.new("HingeConstraint")
+			h.Name = "RagDedoHinge"
+			h.Attachment0 = a0
+			h.Attachment1 = a1
+			h.LimitsEnabled = true
+			h.LowerAngle = lo
+			h.UpperAngle = hi
+			h.Restitution = 0
+			h.Parent = pai
+			table.insert(ragdollDedosCriados, h)
+			return h
+		end
+
+		for _, art in ipairs(partesMao) do
+			if not (art.braco and art.braco.Parent and art.palma and art.palma.Parent) then continue end
+
+			local l = (art.ehDireito and CONFIG_POS.Direita or CONFIG_POS.Esquerda)[art.id]
+			local c = CONFIG_DEDOS[art.id]
+			local dir = l.dir
+			local hb, hp = c.tampBase.Y, c.tampPonta.Y
+			local pBase, pPonta, palma = art.pBase, art.pPonta, art.palma
+			art.ragDir, art.ragHb = dir, hb
+
+			-- tira o achatamento de "ponta tocando o chão" antes de congelar a pose
+			pPonta.Size = art.origTamanhoPonta
+
+			local curBase = art.angBase * dir
+			local curPonta = art.angPonta * dir
+
+			-- nó do dedo na palma, na pose reta (sem a rotação de dobra) -> limites absolutos
+			local K = art.baseWeld.C0 * CFrame.new(0, hb / 2, 0)
+			local Ks = K * CFrame.Angles(0, 0, -rad(curBase))
+
+			-- solta o dedo da palma e posiciona a ponta pela mesma geometria do calcFingerCFrames
+			art.baseWeld.Enabled = false
+			art.pontaWeld.Enabled = false
+			pPonta.CFrame = pBase.CFrame
+				* CFrame.new(0, -hb / 2, 0)
+				* CFrame.Angles(0, 0, rad(curPonta))
+				* CFrame.new(0, -hp / 2, 0)
+
+			for _, p in ipairs({ pBase, pPonta }) do
+				p.Massless = false
+				p.CustomPhysicalProperties = PhysicalProperties.new(DEDOS_RAGDOLL.densidade, 0.8, 0, 1, 1)
+			end
+			pPonta.CanCollide = DEDOS_RAGDOLL.colidirPonta
+
+			-- dobradiça 1: palma -> base do dedo
+			local lo1, hi1 = limitesDobradica(curBase, DEDOS_RAGDOLL.limBase[1], DEDOS_RAGDOLL.limBase[2], dir)
+			local a0 = novoAttachment(palma, Ks * HO)
+			local a1 = novoAttachment(pBase, CFrame.new(0, hb / 2, 0) * HO)
+			novaDobradica(a0, a1, lo1, hi1, pBase)
+
+			-- dobradiça 2: base -> ponta do dedo
+			local lo2, hi2 = limitesDobradica(curPonta, DEDOS_RAGDOLL.limPonta[1], DEDOS_RAGDOLL.limPonta[2], dir)
+			local a2 = novoAttachment(pBase, CFrame.new(0, -hb / 2, 0) * HO)
+			local a3 = novoAttachment(pPonta, CFrame.new(0, hp / 2, 0) * HO)
+			novaDobradica(a2, a3, lo2, hi2, pPonta)
+
+			-- cunhas da junta passam a seguir a base do dedo (o tamanho é atualizado no Heartbeat)
+			if art.juntaWeld then
+				for _, w in ipairs(art.juntaWeld) do w.Part0 = pBase end
+			end
+
+			-- mantém a velocidade do braço
+			local v, w = palma.AssemblyLinearVelocity, palma.AssemblyAngularVelocity
+			pBase.AssemblyLinearVelocity, pPonta.AssemblyLinearVelocity = v, v
+			pBase.AssemblyAngularVelocity, pPonta.AssemblyAngularVelocity = w, w
+		end
+
+		-- pontas colidem com o mundo, mas não com o próprio corpo nem com os outros dedos
+		if DEDOS_RAGDOLL.colidirPonta then
+			local outros, vistos = {}, {}
+			for _, d in ipairs(character:GetDescendants()) do
+				if d:IsA("BasePart") then table.insert(outros, d); vistos[d] = true end
+			end
+			for _, art in ipairs(partesMao) do
+				for _, p in ipairs({ art.pBase, art.pPonta, art.palma }) do
+					if p and not vistos[p] then table.insert(outros, p); vistos[p] = true end
+				end
+			end
+			for _, art in ipairs(partesMao) do
+				if art.pPonta and art.pPonta.Parent then
+					for _, q in ipairs(outros) do
+						if q ~= art.pPonta then
+							local nc = Instance.new("NoCollisionConstraint")
+							nc.Name = "RagDedoNoCollide"
+							nc.Part0, nc.Part1 = art.pPonta, q
+							nc.Parent = art.pPonta
+							table.insert(ragdollDedosCriados, nc)
+						end
+					end
+				end
+			end
+		end
+
+		ragdollDedosConn = RunService.Heartbeat:Connect(function(dt)
+			if not folder.Parent or not dedosRagdollAtivo then
+				if ragdollDedosConn then ragdollDedosConn:Disconnect(); ragdollDedosConn = nil end
+				return
+			end
+			local f = math.max(0, 1 - DEDOS_RAGDOLL.amortecimento * dt)
+			for _, art in ipairs(partesMao) do
+				local pBase, pPonta = art.pBase, art.pPonta
+				if pBase and pPonta and pBase.Parent and pPonta.Parent then
+					pBase.AssemblyAngularVelocity = pBase.AssemblyAngularVelocity * f
+					pPonta.AssemblyAngularVelocity = pPonta.AssemblyAngularVelocity * f
+
+					-- redesenha as cunhas da junta conforme o ângulo real da ponta
+					if art.juntaWeld and art.ragDir then
+						local rel = pBase.CFrame:ToObjectSpace(pPonta.CFrame)
+						local th = math.deg(math.atan2(rel.RightVector.Y, rel.RightVector.X))
+						local cf1, s1, cf2, s2 = calcJuntaCFrames(
+							art.id, art.ehDireito, th * art.ragDir, CFrame.new(0, -art.ragHb / 2, 0)
+						)
+						art.juntaWeld[1].Part1.Size, art.juntaWeld[1].C0 = s1, cf1
+						art.juntaWeld[2].Part1.Size, art.juntaWeld[2].C0 = s2, cf2
+					end
+				end
+			end
+		end)
+	end
+
+	_G.__DedosRagdoll = { ligar = ragdollDedosLigar, desligar = ragdollDedosDesligar }
 
 	local rightShoulder = torso:FindFirstChild("Right Shoulder")
 	local leftShoulder = torso:FindFirstChild("Left Shoulder")
@@ -3343,6 +4531,7 @@ local function criarMaoDinamica(character)
 
 		for _, art in ipairs(partesMao) do
 			if not art.braco or not art.braco.Parent then continue end
+			if dedosRagdollAtivo then continue end -- dedos em ragdoll: quem manda é a física
 
 			if art.trail then
 				art.trail.Enabled = (currentEmote == "Apontar" or apontarCamera)
